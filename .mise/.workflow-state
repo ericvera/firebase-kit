@@ -1,1 +1,6 @@
-{}
+{
+  "route": "direct",
+  "approved": {
+    "goals": "e3f93c65e16d4b75269980d83dcd10d0eddeadcd"
+  }
+}
