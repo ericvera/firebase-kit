@@ -10,7 +10,7 @@ Ship: merge (squash)
 - Check:
   - yarn lint
   - yarn build
-- Unit tests: yarn test
+- Unit tests: match the command to the change — `yarn test:unit` by default; when the change touches code covered by `*.emulator.test.ts` (currently only `firebase-kit-admin`), run `yarn test:emulator` too. `yarn test` runs both and is what the release workflow gates on.
 
 ## Test conventions
 
