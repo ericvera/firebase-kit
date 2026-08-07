@@ -12,8 +12,8 @@ GitHub Actions publishing pipeline.
 - **REQ-REPO-1:** The repository MUST contain exactly three publishable packages
   under `packages/`: `firebase-kit-protocol`, `firebase-kit-client`, and
   `firebase-kit-admin`.
-- **REQ-REPO-2:** The root package MUST be private and MUST NOT be publishable to
-  npm.
+- **REQ-REPO-2:** The root package MUST be named `@firebase-kit/monorepo`, MUST be
+  private, and MUST NOT be publishable to npm.
 - **REQ-REPO-3:** The root package MUST declare `packages/*` as its workspaces so
   that a single install at the root wires all three packages together.
 - **REQ-REPO-4:** `firebase-kit-client` and `firebase-kit-admin` MUST each depend
@@ -33,9 +33,10 @@ GitHub Actions publishing pipeline.
 These are externally observable and several other requirements silently depend on
 them, so they are stated rather than left to the implementer.
 
-- **REQ-TOOL-1:** The repository MUST use Yarn 4 (Berry) with `node-modules`
-  linking as its package manager, pinned via a committed Yarn release, matching
-  the maintainer's other library repositories.
+- **REQ-TOOL-1:** The repository MUST use Yarn **4.18.0 or newer** with
+  `node-modules` linking, pinned via a committed Yarn release. The lower bound is
+  load-bearing, not cosmetic: `yarn npm publish`'s OIDC token exchange — which
+  REQ-PUB-4 depends on — does not exist in earlier Yarn 4 releases.
 - **REQ-TOOL-2:** Because Yarn Berry does not run npm's `prepare` lifecycle, git
   hook installation MUST be wired through Yarn's after-install mechanism. A fresh
   clone followed by an install MUST leave working commit hooks without any extra
@@ -55,8 +56,13 @@ them, so they are stated rather than left to the implementer.
   `firebase-kit-protocol`, `firebase-kit-client`, `firebase-kit-admin`.
 - **REQ-PKG-2:** Each package MUST publish with public access.
 - **REQ-PKG-3:** Each published tarball MUST contain the package's compiled
-  output, its `README.md`, and a copy of the MIT license text, and MUST NOT
-  contain test files, test fixtures, or mock directories.
+  output, its own `README.md`, and its own `LICENSE` file. It MUST exclude test
+  files (`*.test.*`), test fixtures (`__test__`), and module shims (`__mocks__`).
+  It MUST NOT exclude `firebase-kit-admin`'s `mocks/` build output — despite the
+  name, that is a shipped public entry point (REQ-PKG-5), not test scaffolding.
+- **REQ-PKG-3a:** Each package MUST carry its own `LICENSE` file. A root-level
+  `LICENSE` is not copied into a subpackage tarball by the packing tool, so
+  REQ-REPO-6 alone would leave consumers with no license text.
 - **REQ-PKG-4:** A consumer installing a published package MUST receive a
   `firebase-kit-protocol` dependency pinned to a concrete published version — the
   workspace protocol MUST NOT appear in any published `package.json`.
@@ -77,6 +83,10 @@ them, so they are stated rather than left to the implementer.
 - **REQ-PKG-8:** Each package's runtime, peer, and optional-peer dependency
   declarations MUST match what the package actually imports — no dependency
   carried over from Okven that the package does not use, and none omitted.
+- **REQ-PKG-9:** Every declared version range MUST be one the test suite actually
+  runs against, so a consumer installing at the low end of a range gets a
+  combination that was exercised. Widening a range to a newer major that the
+  tests have not been run against is out of scope for this work.
 
 ## 4. Versioning
 
@@ -99,7 +109,9 @@ them, so they are stated rather than left to the implementer.
 
 ## 5. Automated publishing
 
-- **REQ-PUB-1:** A push to `main` MUST be the only trigger that publishes.
+- **REQ-PUB-1:** A push to `main` MUST be the only **automatic** trigger that
+  publishes. A manual trigger MAY exist solely to re-run a failed release
+  (REQ-PUB-10); no other automatic trigger is permitted.
 - **REQ-PUB-2:** A push to `main` containing no release-worthy conventional
   commits MUST complete without publishing anything, without creating a tag, and
   without failing.
@@ -114,18 +126,23 @@ them, so they are stated rather than left to the implementer.
 - **REQ-PUB-6:** `firebase-kit-protocol` MUST be published before
   `firebase-kit-client` and `firebase-kit-admin`. At no point may a published
   package reference a `firebase-kit-protocol` version that is not yet installable.
-- **REQ-PUB-7:** After a release, the version bump MUST be committed back to
-  `main` in a commit that does not itself trigger another release.
-- **REQ-PUB-8:** Release runs MUST be serialized. A run that has begun publishing
-  MUST NOT be cancelled by a newer push, because cancellation mid-sequence would
-  leave some packages published at a version and others not.
+- **REQ-PUB-7:** The version bump MUST be committed back to `main` **before** any
+  package is published, in a commit that does not itself trigger another release.
+  Fixing this order is what makes REQ-PUB-10's failure state knowable: the
+  repository's recorded version is always at or ahead of what is on npm, never
+  behind.
+- **REQ-PUB-8:** Release runs MUST be serialized, and a run that has begun
+  publishing MUST NOT be cancelled by a newer push — cancelling mid-sequence
+  would strand some packages published at a version and others not.
 - **REQ-PUB-9:** If publishing any package fails, the workflow run MUST fail
   visibly, and the remaining packages MUST NOT be published at that version.
-- **REQ-PUB-10:** A failed release MUST be recoverable without a version being
-  permanently stranded: re-running after a fix MUST either complete the partial
-  release or move cleanly to the next version. The repository MUST document the
-  recovery procedure for the case where some packages published and others did
-  not.
+- **REQ-PUB-10:** A partially-published release MUST be recoverable. Because npm
+  rejects republishing an existing version, an unattended re-run cannot complete
+  one — so the repository MUST document a maintainer recovery procedure covering
+  both available routes: publishing the missing packages manually at the already
+  tagged version, or abandoning that version and letting the next release move
+  forward, leaving a version gap. The procedure MUST state that a version gap is
+  acceptable and that republishing is not possible.
 
 ## 6. Bootstrap
 
@@ -134,7 +151,13 @@ them, so they are stated rather than left to the implementer.
   placeholder release before the automated pipeline can publish it.
 - **REQ-BOOT-2:** Each placeholder MUST be version `0.0.1` and MUST contain only
   a `README.md` stating the package is coming soon, plus the minimum metadata npm
-  requires to accept it.
+  requires to accept it. The root package MUST also be at `0.0.1`, since that is
+  the version the release tooling reads to compute the next one (REQ-VER-4).
+- **REQ-BOOT-2a:** The phase-1 workflow run MUST pass. The skeleton's build,
+  lint, and test configuration MUST therefore be consistent with a repository that
+  contains no TypeScript sources and no tests — a build referencing package
+  projects that do not exist yet, or a test runner that treats "no test files" as
+  failure, MUST NOT be committed in that state.
 - **REQ-BOOT-3:** The placeholder release MUST be publishable by the maintainer
   from a terminal — the system MUST NOT attempt to publish the placeholders
   itself.
@@ -162,15 +185,30 @@ them, so they are stated rather than left to the implementer.
 - **REQ-QUAL-2:** The repository MUST provide separate commands to run unit tests
   alone and emulator tests alone, plus a command running both.
 - **REQ-QUAL-3:** The full test command MUST run both unit and emulator tests.
-- **REQ-QUAL-4:** Linting MUST apply type-aware strict rules equivalent to those
-  used in the maintainer's other library repositories, and the repository MUST
-  lint clean — findings are fixed, not suppressed by disabling rules wholesale.
+- **REQ-QUAL-3a:** The root test commands MUST cover every package that has tests
+  while preserving each package's own test setup — its setup files and its mock
+  reset behavior — and MUST succeed rather than error on a package that has no
+  tests at all (`firebase-kit-protocol`).
+- **REQ-QUAL-3b:** The emulator test command MUST run with
+  `firebase-kit-admin`'s emulator configuration in effect, since the emulator
+  ports and Firestore rules are declared package-locally.
+- **REQ-QUAL-4:** Linting MUST apply the same type-aware strict configuration the
+  maintainer's other library repositories use — recommended plus
+  `strictTypeChecked` plus `stylisticTypeChecked`, together with the local rules:
+  `curly`, `line-comment-position: above`, `max-len` of 80 for comments only,
+  `prefer-function-type` off, and no `describe` wrappers in test files. The
+  repository MUST lint clean; findings are fixed, not suppressed by disabling
+  rules wholesale.
 - **REQ-QUAL-5:** The build MUST type-check all three packages under the
   project's strictest TypeScript settings and MUST emit type declarations that
   consumers can use.
+- **REQ-QUAL-5a:** Emitted declarations MUST retain doc comments, so consumers
+  get documentation in editor tooling. The Okven tsconfigs strip them
+  (`removeComments: true`) and MUST NOT be carried over in that state.
 - **REQ-QUAL-6:** Committing MUST format and lint staged files automatically.
-- **REQ-QUAL-7:** The install-time and publish-time git hook machinery MUST NOT
-  interfere with publishing from CI.
+- **REQ-QUAL-7:** Publishing from CI MUST NOT be blocked or altered by git hook
+  machinery — a release run MUST NOT fail, and MUST NOT skip a package, because a
+  hook or lifecycle script fired or failed to fire.
 
 ## 8. Tests
 
@@ -199,7 +237,12 @@ them, so they are stated rather than left to the implementer.
 ## 9. Documentation
 
 - **REQ-DOC-1:** The repository root MUST have a `README.md` that states the
-  monorepo's purpose and links to each package.
+  monorepo's purpose, links to each package, and links to the maintainer setup
+  and release-recovery documentation.
+- **REQ-DOC-1a:** The maintainer instructions required by REQ-BOOT-7 and the
+  recovery procedure required by REQ-PUB-10 MUST live in committed files in the
+  repository, not only in this workflow's artifacts, which are deleted at
+  close-out.
 - **REQ-DOC-2:** Each package MUST have a `README.md` covering its purpose,
   installation, its exported entry points, and at least one usage example.
 - **REQ-DOC-3:** Each package README MUST state its required peer dependencies so
@@ -226,7 +269,9 @@ them, so they are stated rather than left to the implementer.
 - **REQ-GUARD-1:** A `.mise/` directory reaching `main` MUST cause the workflow
   run to fail and MUST prevent that run from publishing anything.
 - **REQ-GUARD-2:** The guard MUST NOT prevent the workflow's build, lint, and test
-  steps from running, so a guard trip still reports the state of the code.
+  steps from running, so a guard trip still reports the state of the code. Taken
+  with REQ-GUARD-1, this fixes the guard's position: it runs **after** build,
+  lint, and test, and **before** any version-bump, tag, publish, or release step.
 - **REQ-GUARD-3:** The guard MUST take precedence over REQ-PUB-2: a push carrying
   `.mise/` MUST fail even when it contains no release-worthy commits.
 
@@ -279,10 +324,20 @@ them, so they are stated rather than left to the implementer.
   published version is never one whose Firestore integration tests were skipped.
   REQ-TEST-5 extends the same cost to dependency-update checks, which would
   otherwise fail for lack of a Java runtime.
-- **Two requirements deliberately deviate from the scdate template**, which the
-  goals had assumed could be copied verbatim: REQ-DEP-4 (scdate auto-merges npm
-  majors) and REQ-PUB-5 (scdate publishes with no provenance at all, because
-  `yarn npm publish` does not enable it by default).
+- **Six requirements deliberately deviate from the scdate template**, which the
+  goals had assumed could be copied verbatim. Each was checked against scdate
+  rather than presumed: REQ-DEP-4 (scdate auto-merges npm majors), REQ-PUB-5
+  (scdate publishes with no provenance, because `yarn npm publish` does not
+  enable it by default), REQ-PUB-8 (scdate sets `cancel-in-progress: true`),
+  REQ-PKG-3a and REQ-PKG-7 (no scdate package carries a `LICENSE`, a
+  `description`, or a `repository.directory`), and REQ-QUAL-5a (scdate keeps doc
+  comments in declarations while the Okven tsconfigs strip them — here scdate is
+  the one being followed and Okven the one being departed from).
+- **Two goals items are process concerns with no requirement of their own**:
+  rebasing the mise feature branch onto the new `main` after phase 1, and having
+  the plan stage surface the ESLint fallout count before fixing starts. Both
+  govern how the work is sequenced, not what the system must do, so they belong
+  to the plan rather than to this document.
 - **No `NPM_TOKEN` secret is added even as a fallback.** REQ-PUB-4 forbids it;
   the temporary token used for the placeholder publish is created and revoked by
   the maintainer outside the repository.

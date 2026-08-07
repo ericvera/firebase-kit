@@ -99,8 +99,8 @@ emulator tests and scdate's does not.
 
 ### Deliberate deviations from scdate
 
-Both were assumed from the template during the goals round and turned out not to
-match what scdate actually does:
+scdate is the template, but it is not copied verbatim. Each of these was assumed
+during the goals round to be inherited from the template and turned out not to be:
 
 - **Dependabot major updates do not auto-merge.** scdate's condition auto-merges
   npm majors and excludes only GitHub Actions majors. This repo excludes all
@@ -108,6 +108,17 @@ match what scdate actually does:
 - **npm provenance is enabled explicitly.** scdate has no provenance anywhere —
   `yarn npm publish` does not enable it by default the way `npm publish` does, so
   it must be turned on in configuration rather than inherited.
+- **A release run in progress is never cancelled.** scdate sets
+  `cancel-in-progress: true`, which would abort a run mid-publish and strand some
+  packages published and others not.
+- **Each package carries its own `LICENSE`, `description`, and
+  `repository.directory`.** scdate has none of these; a root `LICENSE` is not
+  copied into a subpackage tarball, and without the other two the npm page shows
+  no summary and links to the monorepo root.
+- **Doc comments are preserved in emitted declarations.** The Okven tsconfigs set
+  `removeComments: true`, which would strip doc comments from published `.d.ts`
+  and break consumer intellisense. scdate deliberately sets it to `false`; this
+  repo follows scdate, not Okven.
 
 ## Bootstrap sequence (has a hard stop)
 
@@ -130,9 +141,11 @@ pipeline**, so that `.mise/` never reaches `main`:
 4. Push `main`. The commit must be non-releasing (a `chore:` subject) so
    `conventional-changelog-action` reports `skipped == 'true'` and every publish
    step no-ops — OIDC is not configured yet and a publish attempt would fail.
-   This push doubles as the pipeline's only rehearsal before the release that
-   matters: it proves the workflow parses, installs, builds, lints, and runs the
-   emulator tests on a runner.
+   The skeleton's build, lint, and test configuration must be consistent with its
+   own (source-free) contents so this run passes rather than failing on an empty
+   repository. That makes it a **partial** rehearsal: it proves the workflow
+   parses, installs, and reaches its gates on a runner. It does **not** exercise
+   the emulator path, which has no tests to run until phase 2.
 5. Rebase the mise feature branch onto the new `main`.
 
 **STOP — handed to Eric:**
