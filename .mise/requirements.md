@@ -58,6 +58,13 @@ them, so they are stated rather than left to the implementer.
 
 ## 3. Package identity and published contents
 
+Unless a requirement says otherwise, this section governs the **real** releases.
+Only REQ-PKG-1 (names) and REQ-PKG-2 (public access) also bind the phase-1
+placeholders; the placeholders' contents are governed by REQ-BOOT-2 and
+REQ-BOOT-2b instead. In particular the placeholders MUST NOT declare the entry
+points of REQ-PKG-5, which would permanently publish a `0.0.1` pointing at build
+output that does not exist.
+
 - **REQ-PKG-1:** Each package MUST publish under its existing unscoped name —
   `firebase-kit-protocol`, `firebase-kit-client`, `firebase-kit-admin`.
 - **REQ-PKG-2:** Each package MUST publish with public access.
@@ -96,6 +103,13 @@ them, so they are stated rather than left to the implementer.
 - **REQ-PKG-9:** Declared version ranges MUST NOT be widened to a major version
   the test suite has not been run against. Bringing a stale range forward is out
   of scope for this work.
+- **REQ-PKG-9a:** `firebase-kit-client` MUST ship its `getsetdel` peer range as
+  `^2.0.0`, unchanged. This is a deliberate, known-cost decision: `getsetdel` is
+  published at 3.0.0, so a consumer already on v3 will hit a peer-resolution
+  conflict. It is accepted in order to keep this work's delta from the existing
+  Okven code as small as possible; migrating to `getsetdel` 3 is separate later
+  work. The package READMEs MUST state the required `getsetdel` major so a
+  consumer is not surprised by the conflict.
 
 ## 4. Versioning
 
@@ -117,6 +131,9 @@ them, so they are stated rather than left to the implementer.
   It follows that a partially-failed release leaves no tag, and the authoritative
   record of the attempted version is the version-bump commit on `main`
   (REQ-PUB-7).
+- **REQ-VER-6a:** The tag format MUST match the format the changelog tooling scans
+  for when determining the previous release. If the two diverge, every subsequent
+  release regenerates its notes from the beginning of history.
 - **REQ-VER-7:** The repository MUST NOT maintain a committed `CHANGELOG.md` —
   changelog content lives in the GitHub release notes.
 
@@ -126,8 +143,10 @@ them, so they are stated rather than left to the implementer.
   publishes. A manual trigger MAY exist solely to re-run a failed release
   (REQ-PUB-10); no other automatic trigger is permitted.
 - **REQ-PUB-2:** A push to `main` containing no release-worthy conventional
-  commits MUST complete without publishing anything, without creating a tag, and
-  without failing.
+  commits MUST complete without publishing anything and without creating a tag,
+  and MUST NOT fail *for lack of a release*. It MUST still run and be gated by
+  build, lint, and tests — since push-to-`main` is this repository's only CI, a
+  non-releasing push is otherwise unchecked.
 - **REQ-PUB-3:** A release MUST NOT publish unless the repository's build, lint,
   and full test suite (including emulator tests) all pass first.
 - **REQ-PUB-4:** Publishing MUST authenticate through npm Trusted Publishing
@@ -167,11 +186,15 @@ them, so they are stated rather than left to the implementer.
   a `README.md` stating the package is coming soon, plus the minimum metadata npm
   requires to accept it. The root package MUST also be at `0.0.1`, since that is
   the version the release tooling reads to compute the next one (REQ-VER-4).
-- **REQ-BOOT-2a:** The phase-1 workflow run MUST pass. The skeleton's build,
-  lint, and test configuration MUST therefore be consistent with a repository that
-  contains no TypeScript sources and no tests — a build referencing package
-  projects that do not exist yet, or a test runner that treats "no test files" as
-  failure, MUST NOT be committed in that state.
+- **REQ-BOOT-2a:** The phase-1 workflow run MUST pass **end to end**, including any
+  toolchain-setup steps, not merely its build/lint/test steps. The skeleton's
+  configuration MUST therefore be consistent with a repository that contains no
+  TypeScript sources and no tests: a build referencing package projects that do
+  not exist yet, or a test runner that treats "no test files" as failure, MUST NOT
+  be committed in that state. Any tool that a setup step interrogates — notably the
+  Firebase emulator toolchain, whose setup resolves the installed `firebase-tools`
+  version and fails when nothing declares it — MUST already be declared as a root
+  development dependency in phase 1, even though nothing uses it until phase 2.
 - **REQ-BOOT-2b:** The placeholder packages MUST declare no dependencies at all.
   A placeholder carrying a `workspace:` dependency would, if packed with the wrong
   tool, publish an uninstallable `0.0.1` permanently (REQ-TOOL-1a); declaring none
@@ -193,10 +216,11 @@ them, so they are stated rather than left to the implementer.
   instructions covering: publishing each placeholder in dependency order with the
   exact command; the exact values to enter when configuring each package's trusted
   publisher (repository `ericvera/firebase-kit`, workflow file `publish.yml`);
-  revoking the temporary token afterwards; enabling the repository settings that
-  automated dependency merging depends on; and ensuring `main`'s protection
-  settings permit the release workflow's own version-bump push (REQ-PUB-7), which
-  otherwise fails every release before it publishes.
+  revoking the temporary token afterwards; enabling the repository's
+  "Allow auto-merge" setting, without which every automated dependency pull
+  request stalls; and ensuring `main`'s protection settings permit the release
+  workflow's own version-bump push (REQ-PUB-7), which otherwise fails every
+  release before it publishes.
 - **REQ-BOOT-8:** The release workflow file MUST be named `publish.yml`, and MUST
   NOT be renamed after the maintainer configures the trusted publishers against
   it.
@@ -209,24 +233,42 @@ them, so they are stated rather than left to the implementer.
   alone and emulator tests alone, plus a command running both.
 - **REQ-QUAL-3:** The full test command MUST run both unit and emulator tests.
 - **REQ-QUAL-3a:** The root test commands MUST cover every package that has tests
-  while preserving each package's own test setup — its setup files and its mock
-  reset behavior. They MUST succeed rather than error both on a package with no
-  tests at all (`firebase-kit-protocol`) and, for the emulator command
-  specifically, on a package with tests but no emulator tests
-  (`firebase-kit-client`).
+  while preserving each package's own test setup — its setup files, its mock reset
+  behavior, and the directory each package's test runner treats as its root. That
+  last item is load-bearing and easy to lose: both packages deliberately anchor
+  the runner at `src` so that `src/__mocks__/<module>` directories are discovered
+  as automatic module shims. Anchoring at the package directory instead leaves the
+  tests running while silently resolving the real modules rather than the shims.
+- **REQ-QUAL-3c:** A test command MUST fail if it executes zero tests for a
+  package that has test files. Tolerance for "no tests" MUST be scoped to the
+  packages that genuinely have none (`firebase-kit-protocol` for both commands,
+  `firebase-kit-client` for the emulator command); it MUST NOT be a blanket
+  setting. Without this, a runner misconfiguration introduced during the move
+  would let the release gate pass green having executed none of the suite.
 - **REQ-QUAL-3b:** The emulator test command MUST preserve every element of the
   existing emulator invocation, each of which is load-bearing and none of which
-  may be dropped silently: `firebase-kit-admin`'s package-local emulator port and
-  Firestore rules configuration, the `demo-admin-tests` project id, the
-  restriction to the auth and firestore emulators only, and the fixed
-  `TZ=Etc/Universal` timezone the tests are written against.
+  may be dropped silently: `firebase-kit-admin`'s package-local emulator
+  configuration in full (all four ports, single-project mode off, emulator UI
+  off) and its Firestore rules, the `demo-admin-tests` project id, the restriction
+  to the auth and firestore emulators only, and the fixed `TZ=Etc/Universal`
+  timezone the tests are written against. The existing invocation passes no
+  explicit config path and so depends on running with the admin package as the
+  working directory; a root-level command MUST reproduce that. The auth and
+  firestore host/port pair is additionally duplicated in the emulator test setup
+  file and MUST stay in agreement with the emulator configuration.
 - **REQ-QUAL-4:** Linting MUST apply the same type-aware strict configuration the
   maintainer's other library repositories use — recommended plus
   `strictTypeChecked` plus `stylisticTypeChecked`, together with the local rules:
   `curly`, `line-comment-position: above`, `max-len` of 80 for comments only,
   `prefer-function-type` off, `no-unused-vars` as an error with rest-siblings
   ignored, and no `describe` wrappers in test files. The repository MUST lint
-  clean; findings are fixed, not suppressed by disabling rules wholesale.
+  clean.
+- **REQ-QUAL-4a:** Lint findings MUST be resolved by changing the code. Turning a
+  rule off, downgrading it to a warning, and introducing file- or line-level
+  suppression comments are all forbidden. A finding that appears to genuinely
+  require a suppression MUST be raised rather than suppressed silently — this is
+  the only control on how the unmeasured strict-lint fallout across ~13k LOC gets
+  resolved.
 - **REQ-QUAL-5:** The build MUST type-check all three packages under the
   project's strictest TypeScript settings and MUST emit type declarations that
   consumers can use.
@@ -234,6 +276,13 @@ them, so they are stated rather than left to the implementer.
   get documentation in editor tooling. The Okven tsconfigs strip them
   (`removeComments: true`) and MUST NOT be carried over in that state.
 - **REQ-QUAL-6:** Committing MUST format and lint staged files automatically.
+- **REQ-QUAL-6a:** Formatting MUST be configured identically to the maintainer's
+  other library repositories (two-space indent, no semicolons, single quotes), so
+  the moved sources reformat consistently rather than churning on first commit.
+- **REQ-QUAL-6b:** The three packages MUST be wired as TypeScript project
+  references, with `firebase-kit-client` and `firebase-kit-admin` referencing
+  `firebase-kit-protocol`. This is what orders a root incremental build correctly
+  and what lets the lint configuration resolve types across packages.
 - **REQ-QUAL-7:** The repository MUST NOT carry lifecycle scripts that are inert
   under its own toolchain. Specifically, the sibling repositories' hook-disabling
   scripts (`prepublishOnly` / `postpublish` running `pinst`) MUST NOT be copied
@@ -355,15 +404,18 @@ them, so they are stated rather than left to the implementer.
   published version is never one whose Firestore integration tests were skipped.
   REQ-TEST-5 extends the same cost to dependency-update checks, which would
   otherwise fail for lack of a Java runtime.
-- **Six requirements deliberately deviate from the scdate template**, which the
+- **Seven requirements deliberately deviate from the scdate template**, which the
   goals had assumed could be copied verbatim. Each was checked against scdate
   rather than presumed: REQ-DEP-4 (scdate auto-merges npm majors), REQ-PUB-5
   (scdate publishes with no provenance, because `yarn npm publish` does not
   enable it by default), REQ-PUB-8 (scdate sets `cancel-in-progress: true`),
-  REQ-PKG-3a and REQ-PKG-7 (no scdate package carries a `LICENSE`, a
-  `description`, or a `repository.directory`), and REQ-QUAL-5a (scdate keeps doc
-  comments in declarations while the Okven tsconfigs strip them — here scdate is
-  the one being followed and Okven the one being departed from).
+  REQ-PKG-3a and REQ-PKG-7 (no scdate package carries a `LICENSE` **file**, a
+  `description`, or a `repository.directory` — note that scdate's packages *do*
+  declare a `license` field and a `repository` object, so only those three items
+  are deviations), REQ-QUAL-5a (scdate keeps doc comments in declarations while
+  the Okven tsconfigs strip them — here scdate is the one being followed and Okven
+  the one being departed from), and REQ-QUAL-7 (scdate carries `pinst`
+  publish-lifecycle scripts that are inert under Yarn).
 - **Two goals items are process concerns with no requirement of their own**:
   rebasing the mise feature branch onto the new `main` after phase 1, and having
   the plan stage surface the ESLint fallout count before fixing starts. Both
