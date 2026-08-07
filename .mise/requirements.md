@@ -22,7 +22,8 @@ GitHub Actions publishing pipeline.
   pinned equality range rather than a caret range. `workspace:^`, as used inside
   Okven today, MUST NOT be carried over.
 - **REQ-REPO-5:** The repository MUST be a public GitHub repository named
-  `firebase-kit` under the `ericvera` account.
+  `firebase-kit` under the `ericvera` account. Creating it is part of this work,
+  not a maintainer prerequisite.
 - **REQ-REPO-6:** The repository MUST carry an MIT `LICENSE` file at the root.
 - **REQ-REPO-7:** The repository MUST NOT contain any file that imports from an
   `@okv/*` package, and MUST NOT depend on the Okven repository at build, test, or
@@ -47,11 +48,15 @@ them, so they are stated rather than left to the implementer.
   hook installation MUST be wired through Yarn's after-install mechanism. A fresh
   clone followed by an install MUST leave working commit hooks without any extra
   manual step.
-- **REQ-TOOL-3:** The lockfile MUST be committed, and a clean install from it MUST
-  succeed in CI without network-driven resolution drift.
+- **REQ-TOOL-3:** The lockfile MUST be committed, and CI MUST install with the
+  immutable-lockfile setting explicitly in force, so a stale or drifted lockfile
+  fails the run rather than being silently rewritten. Relying on the package
+  manager's CI-environment default is not sufficient.
 - **REQ-TOOL-4:** Linting MUST work from a clean checkout. Any TypeScript project
   configuration the lint setup requires in order to type-check files not covered
-  by a package `tsconfig.json` MUST be present and committed.
+  by a package `tsconfig.json` MUST be present and committed — this must cover the
+  root-level config files and each package's own test-runner config, both of which
+  sit outside the packages' `src`-scoped projects.
 - **REQ-TOOL-5:** `.mise/` MUST NOT be git-ignored — the workflow that produced
   this document requires it to be committed on feature branches. It is kept off
   `main` by process and by REQ-GUARD-1, never by `.gitignore`.
@@ -109,7 +114,9 @@ output that does not exist.
   conflict. It is accepted in order to keep this work's delta from the existing
   Okven code as small as possible; migrating to `getsetdel` 3 is separate later
   work. The package READMEs MUST state the required `getsetdel` major so a
-  consumer is not surprised by the conflict.
+  consumer is not surprised by the conflict. This trade was put to the maintainer
+  during the requirements stage and chosen deliberately; it is not an oversight
+  inherited from the goals.
 
 ## 4. Versioning
 
@@ -124,6 +131,12 @@ output that does not exist.
 - **REQ-VER-5:** The release commit that produces `1.0.0` MUST carry a
   `BREAKING CHANGE:` footer. A `!`-suffixed type (`feat!:`) MUST NOT be relied on
   for this, because the configured preset does not detect it reliably.
+- **REQ-VER-5a:** The first real release MUST abort before publishing if the
+  computed version is anything other than `1.0.0`. A wrong version published once
+  is permanent — npm forbids republishing — and REQ-PUB-10's recovery covers only
+  partial publishes, not wrong-version ones. The version-classification hedge in
+  REQ-VER-5 is therefore not sufficient on its own; the check is what makes it
+  safe.
 - **REQ-VER-6:** Each release MUST create a matching git tag and a GitHub release
   whose notes are the generated changelog for that version. Exactly one tag MUST
   be created per release, and it MUST be created **after** all three packages have
@@ -131,17 +144,20 @@ output that does not exist.
   It follows that a partially-failed release leaves no tag, and the authoritative
   record of the attempted version is the version-bump commit on `main`
   (REQ-PUB-7).
-- **REQ-VER-6a:** The tag format MUST match the format the changelog tooling scans
-  for when determining the previous release. If the two diverge, every subsequent
-  release regenerates its notes from the beginning of history.
+- **REQ-VER-6a:** Tags MUST be of the form `v<version>` (e.g. `v1.0.0`), and this
+  MUST be the same format the changelog tooling scans for when determining the
+  previous release. If the two diverge, every subsequent release regenerates its
+  notes from the beginning of history.
 - **REQ-VER-7:** The repository MUST NOT maintain a committed `CHANGELOG.md` —
   changelog content lives in the GitHub release notes.
 
 ## 5. Automated publishing
 
-- **REQ-PUB-1:** A push to `main` MUST be the only **automatic** trigger that
-  publishes. A manual trigger MAY exist solely to re-run a failed release
-  (REQ-PUB-10); no other automatic trigger is permitted.
+- **REQ-PUB-1:** A push to `main` MUST be the only trigger that publishes. There
+  MUST NOT be a manual re-run trigger: per REQ-PUB-10 an unattended re-run cannot
+  complete a partial release, and because the version bump is already on `main`
+  (REQ-PUB-7) a re-run would compute a *new* version rather than retry the failed
+  one. Recovery is the documented manual procedure, not a workflow trigger.
 - **REQ-PUB-2:** A push to `main` containing no release-worthy conventional
   commits MUST complete without publishing anything and without creating a tag,
   and MUST NOT fail *for lack of a release*. It MUST still run and be gated by
@@ -156,8 +172,8 @@ output that does not exist.
   enabled by explicit configuration; it MUST NOT be assumed to come from the
   publishing tool's defaults.
 - **REQ-PUB-6:** `firebase-kit-protocol` MUST be published before
-  `firebase-kit-client` and `firebase-kit-admin`. At no point may a published
-  package reference a `firebase-kit-protocol` version that is not yet installable.
+  `firebase-kit-client` and `firebase-kit-admin`, so that neither dependent is on
+  the registry referencing a protocol version that has not been published yet.
 - **REQ-PUB-7:** The version bump MUST be committed back to `main` **before** any
   package is published, in a commit that does not itself trigger another release.
   Fixing this order is what makes REQ-PUB-10's failure state knowable: the
@@ -195,15 +211,21 @@ output that does not exist.
   Firebase emulator toolchain, whose setup resolves the installed `firebase-tools`
   version and fails when nothing declares it — MUST already be declared as a root
   development dependency in phase 1, even though nothing uses it until phase 2.
+  That root declaration MUST persist into phase 2, where `firebase-kit-admin` also
+  declares it per REQ-PKG-8; the emulator cache key is derived from the
+  root-resolved version, so removing the root declaration later would break
+  REQ-TEST-5.
 - **REQ-BOOT-2b:** The placeholder packages MUST declare no dependencies at all.
   A placeholder carrying a `workspace:` dependency would, if packed with the wrong
   tool, publish an uninstallable `0.0.1` permanently (REQ-TOOL-1a); declaring none
   removes the hazard outright.
 - **REQ-BOOT-3:** The placeholder release MUST be publishable by the maintainer
   from a terminal — the system MUST NOT attempt to publish the placeholders
-  itself. The maintainer instructions MUST give the exact command to run, and MUST
-  specify publishing `firebase-kit-protocol` first, for the same dependency-order
-  reason as REQ-PUB-6.
+  itself. The maintainer instructions MUST give the exact command to run, MUST
+  specify publishing `firebase-kit-protocol` first for the same dependency-order
+  reason as REQ-PUB-6, and MUST state how the temporary token is supplied to the
+  publisher for that one-off run. Leaving authentication unstated invites the
+  npm-based workaround that REQ-TOOL-1a forbids.
 - **REQ-BOOT-4:** The placeholder skeleton MUST reach `main` without `.mise/` ever
   being committed to `main`.
 - **REQ-BOOT-5:** The first push to `main` MUST NOT attempt to publish, because
@@ -241,10 +263,23 @@ output that does not exist.
   tests running while silently resolving the real modules rather than the shims.
 - **REQ-QUAL-3c:** A test command MUST fail if it executes zero tests for a
   package that has test files. Tolerance for "no tests" MUST be scoped to the
-  packages that genuinely have none (`firebase-kit-protocol` for both commands,
-  `firebase-kit-client` for the emulator command); it MUST NOT be a blanket
-  setting. Without this, a runner misconfiguration introduced during the move
-  would let the release gate pass green having executed none of the suite.
+  packages that genuinely have none — in the finished repository, that is
+  `firebase-kit-protocol` for both commands and `firebase-kit-client` for the
+  emulator command. It MUST NOT be a blanket setting. Without this, a runner
+  misconfiguration introduced during the move would let the release gate pass
+  green having executed none of the suite.
+- **REQ-QUAL-3d:** REQ-QUAL-3c binds the phase-2 repository. Phase 1 has no tests
+  at all and necessarily runs with blanket tolerance (REQ-BOOT-2a); narrowing that
+  setting to the per-package scope of REQ-QUAL-3c is itself part of phase 2 and
+  MUST NOT be left as the phase-1 configuration.
+- **REQ-QUAL-3e:** The two packages' test runners are shaped differently today —
+  `firebase-kit-admin` declares named unit and emulator projects, while
+  `firebase-kit-client` declares a single unnamed one. The root commands and the
+  package configurations MUST be reconciled so that every package's tests are
+  selected by both root commands. A root command that selects by project name
+  would match nothing in `firebase-kit-client` and silently skip its entire suite,
+  so either the client gains a correspondingly named project or selection MUST NOT
+  be by name.
 - **REQ-QUAL-3b:** The emulator test command MUST preserve every element of the
   existing emulator invocation, each of which is load-bearing and none of which
   may be dropped silently: `firebase-kit-admin`'s package-local emulator
@@ -266,9 +301,11 @@ output that does not exist.
 - **REQ-QUAL-4a:** Lint findings MUST be resolved by changing the code. Turning a
   rule off, downgrading it to a warning, and introducing file- or line-level
   suppression comments are all forbidden. A finding that appears to genuinely
-  require a suppression MUST be raised rather than suppressed silently — this is
-  the only control on how the unmeasured strict-lint fallout across ~13k LOC gets
-  resolved.
+  require a suppression MUST be raised to the maintainer as a blocker, and the work
+  MUST NOT be reported complete with an unresolved one outstanding. The ban itself
+  is checkable: the finished tree MUST contain no `eslint-disable` comment that
+  the moved sources did not already carry. This is the only control on how the
+  unmeasured strict-lint fallout across ~13k LOC gets resolved.
 - **REQ-QUAL-5:** The build MUST type-check all three packages under the
   project's strictest TypeScript settings and MUST emit type declarations that
   consumers can use.
@@ -332,6 +369,12 @@ output that does not exist.
 - **REQ-DOC-5:** Each README code block that is meant to be a runnable file MUST
   carry a header comment naming the file path it represents, so the block can be
   extracted and executed verbatim during verification.
+- **REQ-DOC-6:** Some examples cannot execute standalone — `firebase-kit-admin`'s
+  entry points need a live emulator and an initialized admin app, and
+  `firebase-kit-client`'s need an IndexedDB implementation. Those blocks MUST
+  still be verified against the published surface by type-checking them in the
+  throwaway consumer project rather than running them, and the verification record
+  MUST say which blocks were type-checked instead of executed.
 
 ## 10. Dependency automation
 
@@ -346,8 +389,8 @@ output that does not exist.
 
 ## 11. In-flight work guard
 
-- **REQ-GUARD-1:** A `.mise/` directory reaching `main` MUST cause the workflow
-  run to fail and MUST prevent that run from publishing anything.
+- **REQ-GUARD-1:** A `.mise/` directory reaching `main` MUST cause the release
+  workflow run to fail and MUST prevent that run from publishing anything.
 - **REQ-GUARD-2:** The guard MUST NOT prevent the workflow's build, lint, and test
   steps from running, so a guard trip still reports the state of the code. Taken
   with REQ-GUARD-1, this fixes the guard's position: it runs **after** build,
