@@ -15,11 +15,11 @@ living as workspaces inside the Okven repo, modeled on the existing
 
 Three packages, moved from `/Users/eric/Code/okven/packages/`:
 
-| Package                | Size                            | Notes                                  |
-| ---------------------- | ------------------------------- | -------------------------------------- |
-| `firebase-kit-protocol` | 133 LOC, 0 tests                | shared types/constants; no deps        |
-| `firebase-kit-client`   | ~5.9k LOC, 29 tests             | depends on `firebase-kit-protocol`     |
-| `firebase-kit-admin`    | ~6.7k LOC, 55 tests + 7 emulator | depends on `firebase-kit-protocol`     |
+| Package                 | Source          | Tests                                                        | Notes                              |
+| ----------------------- | --------------- | ------------------------------------------------------------ | ---------------------------------- |
+| `firebase-kit-protocol` | 133 LOC, 3 files | none                                                          | shared types/constants; no deps    |
+| `firebase-kit-client`   | ~5.9k LOC, 80 files | 29 test files, 149 `it()`                                  | depends on `firebase-kit-protocol` |
+| `firebase-kit-admin`    | ~6.7k LOC, 147 files | 55 test files = **48 unit + 7 emulator**; 180 unit + 21 emulator `it()` | depends on `firebase-kit-protocol` |
 
 **Extraction is clean — verified.** Every non-relative import across all three
 packages resolves to a published npm package (`betterbe`, `firebase-admin`,
@@ -66,8 +66,12 @@ emulator tests and scdate's does not.
    packages, one tag per release, all three published every release. Follows
    scdate. `workspace:^` becomes `workspace:*` to match.
 2. **First real release is `1.0.0`** — these already run in Okven production.
-3. **GitHub repo**: public `ericvera/firebase-kit`, created and pushed as part of
-   this work.
+3. **GitHub repo**: public `ericvera/firebase-kit`, created as part of this work.
+   The placeholder skeleton is authored **directly on `main`, outside the mise
+   pipeline** (see Bootstrap below). This is what keeps `.mise/` off `main`: the
+   skeleton is written on `main` rather than merged in from the feature branch,
+   so the repo's own `.mise/` guard and the `CLAUDE.md` never-merge rule are both
+   satisfied without an exception.
 4. **Fresh copy, clean initial commit** — no `git filter-repo` extraction of
    Okven history.
 5. **ESLint**: adopt scdate's config verbatim (`tseslint.configs.strictTypeChecked`
@@ -83,6 +87,27 @@ emulator tests and scdate's does not.
 7. **No separate PR CI workflow** — `publish.yml` on push to `main` is the gate,
    matching scdate and getsetdel. Dependabot PRs are covered by
    `dependabot.yml`.
+8. **Placeholders publish at `0.0.1`; the first real release reaches `1.0.0` via a
+   `BREAKING CHANGE:` footer.** Verified against the action's source:
+   `src/helpers/bumpVersion.js` computes `semver.inc(version, releaseType)` with
+   no 0.x special-casing, and the default `angular` preset returns `major` for a
+   breaking change, so `0.0.1` → `1.0.0`. The footer form is required — `feat!:`
+   exclamation detection is unreliable in that preset
+   (TriPSs/conventional-changelog-action#124). If the footer route misbehaves, the
+   action's `pre-changelog-generation` hook (`preVersionGeneration`) is a
+   deterministic fallback.
+
+### Deliberate deviations from scdate
+
+Both were assumed from the template during the goals round and turned out not to
+match what scdate actually does:
+
+- **Dependabot major updates do not auto-merge.** scdate's condition auto-merges
+  npm majors and excludes only GitHub Actions majors. This repo excludes all
+  majors.
+- **npm provenance is enabled explicitly.** scdate has no provenance anywhere —
+  `yarn npm publish` does not enable it by default the way `npm publish` does, so
+  it must be turned on in configuration rather than inherited.
 
 ## Bootstrap sequence (has a hard stop)
 
@@ -91,33 +116,40 @@ the setting lives in an existing package's settings page on npmjs.com
 (npm/cli#8544 tracks lifting this). All three names are unregistered, so each
 needs one manual publish before OIDC can take over.
 
-**Phase 1 — placeholder release (this work, up to the stop):**
+**Phase 1 — placeholder skeleton. Authored directly on `main`, OUTSIDE the mise
+pipeline**, so that `.mise/` never reaches `main`:
 
 1. Create the public `ericvera/firebase-kit` GitHub repo.
-2. Build the repo skeleton: root `package.json`, Yarn 4, tsconfig, eslint,
-   prettier, husky, `.gitignore`, `LICENSE`, root `README.md`,
+2. On `main`, build the repo skeleton: root `package.json`, Yarn 4, tsconfig,
+   eslint, prettier, husky, `.gitignore`, `LICENSE`, root `README.md`,
    `.github/workflows/publish.yml`, `.github/workflows/dependabot.yml`,
    `.github/dependabot.yml`, `.github/actions/setup-firebase-tools`.
 3. Add three **placeholder packages** at version `0.0.1`, each containing only a
    minimal publishable `package.json` and a `README.md` saying the package is
    coming soon.
-4. Push to `main`. The initial commit must be non-releasing (a `chore:` subject)
-   so `conventional-changelog-action` reports `skipped == 'true'` and the publish
-   steps no-op — OIDC is not configured yet and a publish attempt would fail.
+4. Push `main`. The commit must be non-releasing (a `chore:` subject) so
+   `conventional-changelog-action` reports `skipped == 'true'` and every publish
+   step no-ops — OIDC is not configured yet and a publish attempt would fail.
+   This push doubles as the pipeline's only rehearsal before the release that
+   matters: it proves the workflow parses, installs, builds, lints, and runs the
+   emulator tests on a runner.
+5. Rebase the mise feature branch onto the new `main`.
 
 **STOP — handed to Eric:**
 
-5. Publish the three placeholders manually with a temporary npm token.
-6. Configure the trusted publisher for each package on npmjs.com
+6. Publish the three placeholders manually with a temporary npm token.
+7. Configure the trusted publisher for each package on npmjs.com
    (`ericvera/firebase-kit`, workflow file `publish.yml`), then revoke the
    temporary token.
 
-**Phase 2 — real release (resumes after confirmation):**
+**Phase 2 — real release (this work resumes after explicit confirmation):**
 
-7. Copy the three packages' sources in, wire the workspace/tsconfig/vitest
-   configuration, fix the ESLint fallout, write the per-package READMEs.
-8. Merge to `main` with conventional commits; the workflow publishes **1.0.0** of
-   all three and cuts the GitHub release.
+8. On the mise feature branch: copy the three packages' sources in, wire the
+   workspace/tsconfig/vitest configuration, fix the ESLint fallout, write the
+   per-package READMEs.
+9. Close out: delete `.mise/`, then squash-merge to `main` with a conventional
+   subject carrying a `BREAKING CHANGE:` footer. The workflow publishes **1.0.0**
+   of all three, in dependency order, and cuts the GitHub release.
 
 ## Out of scope
 
@@ -136,11 +168,11 @@ needs one manual publish before OIDC can take over.
   name and every sibling library repo.
 - Package names stay unscoped (`firebase-kit-protocol` / `-client` / `-admin`),
   since all three are available.
-- Placeholders publish at `0.0.1` so the first real release can be `1.0.0`. The
-  exact mechanism for making `conventional-changelog-action` land on `1.0.0`
-  rather than `0.1.0` (a breaking-change footer, a seeded tag, or a one-time
-  version pin) is a plan-stage detail; if no clean mechanism exists, that is a
-  blocker to raise, not a silent downgrade to `0.1.0`.
+- Phase 1 runs outside the mise pipeline, on `main`. This is a deliberate
+  exception to mise's one-piece-of-work-at-a-time rule, taken because the
+  alternative — merging the skeleton from the feature branch — would put `.mise/`
+  on `main` and trip the repo's own guard. The mise work in flight covers phase 2
+  only.
 - `firebase-kit-admin`'s existing `firebase.json` (emulator ports) and
   `firestore.rules` move with the package.
 - The repo adds a guard that fails the workflow if a `.mise/` directory reaches
