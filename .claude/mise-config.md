@@ -23,7 +23,7 @@ shims in `src/__mocks__/`. Every vitest project sets `mockReset: true`.
 ## Test exceptions
 
 - No e2e/browser infrastructure exists (library packages, no UI) — verify with unit tests, emulator tests, and manual verification
-- Consumer-facing wiring (README snippets, package `exports`, publish workflow) — the repo's own tests import source directly and cannot exercise them; verify by `npm pack`ing the tree into a throwaway consumer project outside the repo and running the documented snippets verbatim (extract each block to the path in its header comment). Reading the snippets is not verification.
+- Consumer-facing wiring (README snippets, package `exports`, publish workflow) — the repo's own tests import source directly and cannot exercise them; verify by packing the tree with **`yarn pack`** (never `npm pack` — only Yarn's packer rewrites the `workspace:` protocol to a concrete version, so an npm-packed tarball of a dependent package is uninstallable) into a throwaway consumer project outside the repo and running the documented snippets verbatim (extract each block to the path in its header comment). Reading the snippets is not verification.
 
 ## Models
 
