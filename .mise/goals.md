@@ -1,0 +1,1 @@
+this folder is intended to become a new repo for firebase-kit-x packages that exist in /Users/eric/Code/okven/packages. Help me publish that package so that later I can integrate it into the Okven project. I have a bunch of other packages that have publishing configured under my github account. I would like for this to auto-publish similarly.
