@@ -164,6 +164,27 @@ pipeline**, so that `.mise/` never reaches `main`:
    subject carrying a `BREAKING CHANGE:` footer. The workflow publishes **1.0.0**
    of all three, in dependency order, and cuts the GitHub release.
 
+### Decisions taken during the requirements stage
+
+Two dependency-metadata questions surfaced after this document was first approved
+and were decided with the maintainer. Both are recorded here so the goals and the
+requirements do not contradict each other:
+
+9. **`firebase-kit-client` ships its `getsetdel` peer range unchanged at
+   `^2.0.0`,** even though `getsetdel` is published at 3.0.0 and a consumer on v3
+   will hit a peer-resolution conflict. Chosen to keep this work's delta from the
+   existing Okven code minimal; migrating to `getsetdel` 3 is separate later work.
+10. **`firebase-kit-admin`'s `betterbe` peer becomes required** (it is currently
+    optional). It has a runtime value import reachable from `./validation`, a
+    production entry point, so an optional declaration gives a consumer no
+    install-time warning and a module-resolution failure at runtime.
+    `firestore-snapshot-utils` and `vitest` stay optional: their runtime imports
+    are reachable only from the test-support entry points `./testing` and
+    `./mocks`, which is exactly what an optional peer is for.
+
+This narrows the Out of scope clause below: these two are deliberate metadata
+changes, not incidental ones.
+
 ## Out of scope
 
 - **All changes to the Okven repo.** Swapping Okven's `workspace:^` dependencies

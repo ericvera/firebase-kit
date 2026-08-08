@@ -59,6 +59,16 @@ them, so they are stated rather than left to the implementer.
   by a package `tsconfig.json` MUST be present and committed — this must cover the
   root-level config files and each package's own test-runner config, both of which
   sit outside the packages' `src`-scoped projects.
+- **REQ-TOOL-6:** The repository MUST git-ignore build and tooling output —
+  dependency directories, compiled `dist` output, incremental build info, caches,
+  and the package manager's non-committed internals. None of the stated
+  verification steps would catch a committed `node_modules` or `dist`, so this is
+  stated rather than assumed.
+- **REQ-TOOL-7:** Development tooling invoked only by the root commands
+  (the linter, formatter, TypeScript, and their plugins) counts as used by every
+  package for the purposes of REQ-PKG-8. Each package MUST declare the tooling its
+  own `lint` and `build` scripts invoke; tooling with no per-package script MAY be
+  declared at the root alone.
 - **REQ-TOOL-5:** `.mise/` MUST NOT be git-ignored — the workflow that produced
   this document requires it to be committed on feature branches. It is kept off
   `main` by process and by REQ-GUARD-1, never by `.gitignore`.
@@ -103,16 +113,28 @@ output that does not exist.
   so the npm package page shows what the package is, is discoverable by search,
   and links to its own source rather than the monorepo root.
 - **REQ-PKG-8a:** A dependency with a **runtime** (value, not type-only) import
-  reachable from a published entry point MUST NOT be declared as an *optional*
-  peer. `firebase-kit-admin` currently violates this twice: `betterbe` is imported
-  for a value reachable via `./validation`, and `firestore-snapshot-utils` for
-  values reachable via `./testing`, yet both are marked optional. A consumer
-  therefore gets no install-time warning and a module-resolution failure at
-  runtime. Both MUST become **required** peers. This is a deliberate,
-  maintainer-approved metadata change rather than a delta-minimizing carry-over:
-  unlike the stale-but-working `getsetdel` range of REQ-PKG-9a, an optional peer
-  behind a runtime import is a latent defect that publication turns into a
-  user-facing one.
+  reachable from a **production** entry point MUST NOT be declared as an
+  *optional* peer, because a consumer would get no install-time warning and a
+  module-resolution failure at runtime. Entry points that exist only to support a
+  consumer's tests — `./testing` and `./mocks` — are exempt: a consumer who never
+  imports them never needs their dependencies, which is precisely what an optional
+  peer expresses.
+
+  Applying that rule to the three optional peers declared today:
+
+  | Dependency                 | Value import reachable from | Correct status |
+  | -------------------------- | --------------------------- | -------------- |
+  | `betterbe`                 | `./validation` (production)  | **required** — must change |
+  | `firestore-snapshot-utils` | `./testing` only             | optional — unchanged |
+  | `vitest`                   | `./testing`, `./mocks` only  | optional — unchanged |
+
+  So exactly one change is required: `firebase-kit-admin`'s `betterbe` peer
+  becomes required. It is a deliberate, maintainer-approved metadata change rather
+  than a delta-minimizing carry-over — unlike the stale-but-working `getsetdel`
+  range of REQ-PKG-9a, an optional peer behind a runtime import on a production
+  entry point is a latent defect that publication turns into a user-facing one.
+  Making `vitest` a required peer would be actively wrong: it would force every
+  production consumer to install a test framework.
 - **REQ-PKG-8:** Each package's dependency declarations — runtime, peer,
   optional-peer, **and development** — MUST match what the package actually uses.
   Development dependencies are explicitly in scope. Note that a green build is
@@ -240,10 +262,11 @@ output that does not exist.
   development dependency in phase 1, even though nothing uses it until phase 2.
   That root declaration MUST persist into phase 2, where `firebase-kit-admin` also
   declares it per REQ-PKG-8; the emulator cache key is derived from the
-  root-resolved version, so removing the root declaration later would break
-  REQ-TEST-5. The root and package declarations MUST pin the same exact version:
-  the cache key is derived from resolving the name across the workspace, and two
-  differing locators would produce a malformed key.
+  REQ-TEST-5's cache key is derived by resolving `firebase-tools` across the whole
+  dependency graph. Where it is declared therefore matters less than that it
+  resolves to exactly one locator: the root and `firebase-kit-admin` MUST pin the
+  same exact version, since two differing locators would resolve to two lines and
+  produce a malformed cache key.
 - **REQ-BOOT-2b:** The placeholder packages MUST declare no dependencies at all.
   A placeholder carrying a `workspace:` dependency would, if packed with the wrong
   tool, publish an uninstallable `0.0.1` permanently (REQ-TOOL-1a); declaring none
@@ -279,8 +302,10 @@ output that does not exist.
 ## 7. Quality gates
 
 - **REQ-QUAL-1:** The repository MUST provide a single root command each for
-  formatting, linting, building, and testing that covers all three packages, named
-  exactly `yarn format`, `yarn lint`, `yarn build`, and `yarn test`. The names are
+  formatting, linting, building, and testing, named
+  exactly `yarn format`, `yarn lint`, `yarn build`, and `yarn test`. Format, lint,
+  and build MUST cover all three packages; the test commands cover every package
+  that has tests of the relevant kind, per REQ-QUAL-3c. The names are
   fixed, not incidental: the project configuration records them as this
   repository's quality commands.
 - **REQ-QUAL-2:** The repository MUST provide separate commands to run unit tests
@@ -319,10 +344,10 @@ output that does not exist.
   package configurations MUST be reconciled so that both root commands select
   every applicable package's tests. A root command that selects by an exact
   project name would match nothing in `firebase-kit-client` and silently skip its
-  entire suite. Note that project names must be unique across the workspace, so
-  the client cannot simply reuse the admin package's project name; the
-  reconciliation must be by distinct names with pattern selection, or by not
-  selecting on name at all.
+  entire suite. `firebase-kit-admin` must retain a name-based split regardless,
+  since REQ-TEST-4 requires its unit and emulator groups to be runnable
+  independently; only `firebase-kit-client`, which has a single group, may be
+  selected without naming.
 - **REQ-QUAL-3b:** The emulator test command MUST preserve every element of the
   existing emulator invocation, each of which is load-bearing and none of which
   may be dropped silently: `firebase-kit-admin`'s package-local emulator
