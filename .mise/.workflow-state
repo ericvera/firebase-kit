@@ -1,6 +1,7 @@
 {
   "route": "direct",
   "approved": {
-    "goals": "44a71c00272ac703ec98e0b980c9434dda9f7eb1"
+    "goals": "01d48048ad469ad5e4917498dbc42c4b737afb47",
+    "requirements": "d182c3b6efef4a04ab2411b59cb73c0ef2ef8808"
   }
 }
