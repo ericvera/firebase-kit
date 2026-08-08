@@ -16,11 +16,13 @@ GitHub Actions publishing pipeline.
   private, and MUST NOT be publishable to npm.
 - **REQ-REPO-3:** The root package MUST declare `packages/*` as its workspaces so
   that a single install at the root wires all three packages together.
-- **REQ-REPO-4:** `firebase-kit-client` and `firebase-kit-admin` MUST each depend
-  on `firebase-kit-protocol` through the **exact** workspace protocol
-  (`workspace:*`), so that after the publish-time rewrite a consumer receives a
-  pinned equality range rather than a caret range. `workspace:^`, as used inside
-  Okven today, MUST NOT be carried over.
+- **REQ-REPO-4:** In the finished repository, `firebase-kit-client` and
+  `firebase-kit-admin` MUST each depend on `firebase-kit-protocol` through the
+  **exact** workspace protocol (`workspace:*`), so that after the publish-time
+  rewrite a consumer receives a pinned equality range rather than a caret range.
+  `workspace:^`, as used inside Okven today, MUST NOT be carried over. This binds
+  phase 2; the phase-1 placeholders declare no dependencies at all
+  (REQ-BOOT-2b).
 - **REQ-REPO-5:** The repository MUST be a public GitHub repository named
   `firebase-kit` under the `ericvera` account. Creating it is part of this work,
   not a maintainer prerequisite.
@@ -102,9 +104,14 @@ output that does not exist.
   and links to its own source rather than the monorepo root.
 - **REQ-PKG-8:** Each package's dependency declarations — runtime, peer,
   optional-peer, **and development** — MUST match what the package actually uses.
-  Development dependencies are explicitly in scope: inside Okven they could be
-  satisfied by a hoisted root install and go undeclared, and a standalone repo
-  removes that safety net.
+  Development dependencies are explicitly in scope. Note that a green build is
+  *not* evidence of compliance: this repository hoists across workspaces just as
+  Okven does, so a package importing something declared only at the root or by a
+  sibling will build, lint, and test cleanly while still shipping an incomplete
+  manifest. Compliance MUST therefore be established by inspecting each package's
+  imports against its own manifest, not inferred from CI passing. A known instance
+  to resolve: `firebase-kit-admin` imports `node:crypto` and no package declares
+  the Node type definitions — Okven's root does.
 - **REQ-PKG-9:** Declared version ranges MUST NOT be widened to a major version
   the test suite has not been run against. Bringing a stale range forward is out
   of scope for this work.
@@ -131,12 +138,15 @@ output that does not exist.
 - **REQ-VER-5:** The release commit that produces `1.0.0` MUST carry a
   `BREAKING CHANGE:` footer. A `!`-suffixed type (`feat!:`) MUST NOT be relied on
   for this, because the configured preset does not detect it reliably.
-- **REQ-VER-5a:** The first real release MUST abort before publishing if the
-  computed version is anything other than `1.0.0`. A wrong version published once
-  is permanent — npm forbids republishing — and REQ-PUB-10's recovery covers only
-  partial publishes, not wrong-version ones. The version-classification hedge in
-  REQ-VER-5 is therefore not sufficient on its own; the check is what makes it
-  safe.
+- **REQ-VER-5a:** When the previous version is the `0.0.1` bootstrap placeholder —
+  that is, on the first real release and only then — the workflow MUST abort if
+  the computed version is anything other than `1.0.0`. The check MUST run
+  **before** the version-bump commit of REQ-PUB-7, not merely before publishing:
+  aborting afterwards would leave the wrong version committed on `main` as the
+  base for the next computation. A wrong version published once is permanent — npm
+  forbids republishing — and REQ-PUB-10's recovery covers only partial publishes,
+  not wrong-version ones, so the classification hedge in REQ-VER-5 is not
+  sufficient on its own.
 - **REQ-VER-6:** Each release MUST create a matching git tag and a GitHub release
   whose notes are the generated changelog for that version. Exactly one tag MUST
   be created per release, and it MUST be created **after** all three packages have
@@ -250,9 +260,13 @@ output that does not exist.
 ## 7. Quality gates
 
 - **REQ-QUAL-1:** The repository MUST provide a single root command each for
-  formatting, linting, building, and testing that covers all three packages.
+  formatting, linting, building, and testing that covers all three packages, named
+  exactly `yarn format`, `yarn lint`, `yarn build`, and `yarn test`. The names are
+  fixed, not incidental: the project configuration records them as this
+  repository's quality commands.
 - **REQ-QUAL-2:** The repository MUST provide separate commands to run unit tests
-  alone and emulator tests alone, plus a command running both.
+  alone and emulator tests alone, named exactly `yarn test:unit` and
+  `yarn test:emulator`, plus `yarn test` running both.
 - **REQ-QUAL-3:** The full test command MUST run both unit and emulator tests.
 - **REQ-QUAL-3a:** The root test commands MUST cover every package that has tests
   while preserving each package's own test setup — its setup files, its mock reset
@@ -261,25 +275,29 @@ output that does not exist.
   the runner at `src` so that `src/__mocks__/<module>` directories are discovered
   as automatic module shims. Anchoring at the package directory instead leaves the
   tests running while silently resolving the real modules rather than the shims.
-- **REQ-QUAL-3c:** A test command MUST fail if it executes zero tests for a
-  package that has test files. Tolerance for "no tests" MUST be scoped to the
-  packages that genuinely have none — in the finished repository, that is
-  `firebase-kit-protocol` for both commands and `firebase-kit-client` for the
-  emulator command. It MUST NOT be a blanket setting. Without this, a runner
-  misconfiguration introduced during the move would let the release gate pass
-  green having executed none of the suite.
+- **REQ-QUAL-3c:** In the finished repository, a test command MUST fail if a
+  package that has test files executes zero of them. The intended mechanism is
+  structural, not a tolerance flag: a package with no tests
+  (`firebase-kit-protocol`) simply has no test project declared, and the emulator
+  command targets only the package that has emulator tests
+  (`firebase-kit-admin`) — under which the runner's default "no tests is a
+  failure" behavior already enforces this everywhere it applies. A repository-wide
+  "pass with no tests" setting MUST NOT be left enabled in the finished
+  repository, because it would mask a runner misconfiguration introduced during
+  the move and let the release gate pass green having executed none of the suite.
 - **REQ-QUAL-3d:** REQ-QUAL-3c binds the phase-2 repository. Phase 1 has no tests
-  at all and necessarily runs with blanket tolerance (REQ-BOOT-2a); narrowing that
-  setting to the per-package scope of REQ-QUAL-3c is itself part of phase 2 and
-  MUST NOT be left as the phase-1 configuration.
+  at all, so whatever accommodation makes REQ-BOOT-2a's skeleton run pass MUST be
+  removed as part of phase 2 rather than left in place.
 - **REQ-QUAL-3e:** The two packages' test runners are shaped differently today —
   `firebase-kit-admin` declares named unit and emulator projects, while
   `firebase-kit-client` declares a single unnamed one. The root commands and the
-  package configurations MUST be reconciled so that every package's tests are
-  selected by both root commands. A root command that selects by project name
-  would match nothing in `firebase-kit-client` and silently skip its entire suite,
-  so either the client gains a correspondingly named project or selection MUST NOT
-  be by name.
+  package configurations MUST be reconciled so that both root commands select
+  every applicable package's tests. A root command that selects by an exact
+  project name would match nothing in `firebase-kit-client` and silently skip its
+  entire suite. Note that project names must be unique across the workspace, so
+  the client cannot simply reuse the admin package's project name; the
+  reconciliation must be by distinct names with pattern selection, or by not
+  selecting on name at all.
 - **REQ-QUAL-3b:** The emulator test command MUST preserve every element of the
   existing emulator invocation, each of which is load-bearing and none of which
   may be dropped silently: `firebase-kit-admin`'s package-local emulator
@@ -303,11 +321,15 @@ output that does not exist.
   suppression comments are all forbidden. A finding that appears to genuinely
   require a suppression MUST be raised to the maintainer as a blocker, and the work
   MUST NOT be reported complete with an unresolved one outstanding. The ban itself
-  is checkable: the finished tree MUST contain no `eslint-disable` comment that
-  the moved sources did not already carry. This is the only control on how the
-  unmeasured strict-lint fallout across ~13k LOC gets resolved.
+  is checkable: the moved sources carry no `eslint-disable` comments today, so the
+  finished tree MUST contain none either. Type assertions used to silence a
+  finding (`as`, `as unknown as`, non-null assertions) count as suppression for
+  this purpose and are equally forbidden — they are the loophole a
+  comment-only ban would leave open, and they defeat the type checking the
+  stricter rules exist to provide.
 - **REQ-QUAL-5:** The build MUST type-check all three packages under the
-  project's strictest TypeScript settings and MUST emit type declarations that
+  strictest shared TypeScript base configuration the maintainer's other library
+  repositories use (`@tsconfig/strictest`), and MUST emit type declarations that
   consumers can use.
 - **REQ-QUAL-5a:** Emitted declarations MUST retain doc comments, so consumers
   get documentation in editor tooling. The Okven tsconfigs strip them
@@ -344,10 +366,11 @@ output that does not exist.
   MUST NOT require a real Firebase project or network credentials.
 - **REQ-TEST-4:** Emulator tests MUST be distinguishable from unit tests by file
   name alone, so either group can be run without the other.
-- **REQ-TEST-5:** Any CI job that runs the emulator tests MUST provision a Java
-  runtime and MUST NOT re-download the emulator binaries on every run when the
-  toolchain version is unchanged. This applies to the release workflow and to the
-  automated dependency-update checks alike.
+- **REQ-TEST-5:** Any CI job that runs the emulator tests MUST provision a Java 21
+  runtime and MUST cache the emulator binaries, keyed on the resolved
+  `firebase-tools` version, so they are not re-downloaded on every run while that
+  version is unchanged. This applies to the release workflow and to the automated
+  dependency-update checks alike.
 - **REQ-TEST-6:** Tests MUST NOT use `describe` wrappers; the existing flat `it()`
   structure MUST be preserved.
 
@@ -369,6 +392,13 @@ output that does not exist.
 - **REQ-DOC-5:** Each README code block that is meant to be a runnable file MUST
   carry a header comment naming the file path it represents, so the block can be
   extracted and executed verbatim during verification.
+- **REQ-DOC-6a:** The verification consumer project MUST install all three packed
+  tarballs together, wired so that `firebase-kit-client` and `firebase-kit-admin`
+  resolve `firebase-kit-protocol` from the **packed tarball** rather than from the
+  registry. Without this the verification fails for an irrelevant reason: during
+  phase 2 the packed version is still `0.0.1`, which on the registry is the
+  content-free bootstrap placeholder, so every dependent's snippets would fail to
+  resolve protocol regardless of whether the code under test is correct.
 - **REQ-DOC-6:** Some examples cannot execute standalone — `firebase-kit-admin`'s
   entry points need a live emulator and an initialized admin app, and
   `firebase-kit-client`'s need an IndexedDB implementation. Those blocks MUST
