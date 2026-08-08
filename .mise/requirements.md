@@ -108,8 +108,11 @@ output that does not exist.
   for a value reachable via `./validation`, and `firestore-snapshot-utils` for
   values reachable via `./testing`, yet both are marked optional. A consumer
   therefore gets no install-time warning and a module-resolution failure at
-  runtime. Each MUST become a required peer, or the entry point reaching it MUST
-  stop importing it at runtime.
+  runtime. Both MUST become **required** peers. This is a deliberate,
+  maintainer-approved metadata change rather than a delta-minimizing carry-over:
+  unlike the stale-but-working `getsetdel` range of REQ-PKG-9a, an optional peer
+  behind a runtime import is a latent defect that publication turns into a
+  user-facing one.
 - **REQ-PKG-8:** Each package's dependency declarations — runtime, peer,
   optional-peer, **and development** — MUST match what the package actually uses.
   Development dependencies are explicitly in scope. Note that a green build is
