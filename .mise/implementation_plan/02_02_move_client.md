@@ -111,8 +111,16 @@ package where that lands at scale.**
    The exact form rewrites to a pinned equality range at publish time, which is
    what the lockstep versioning scheme wants.
 
-   Leave the remaining dependency work to task 2.4 — including the `getsetdel`
-   peer range, which stays at its current major deliberately.
+   **Set the version to `0.0.1`**, matching the root and the published
+   placeholder. Okven's manifest reads `0.0.0`; copying that verbatim breaks the
+   lockstep invariant and would not be caught until task 3.4.
+
+   **Carry the dependency declarations over too** — the runtime, peer,
+   optional-peer, and development dependencies Okven's manifest declares, so the
+   package installs, builds, and tests within this task. Task 2.4 *audits* those
+   declarations against actual imports and corrects them; it does not create them
+   from nothing. Leave the `getsetdel` peer range exactly as it is — it stays at
+   its current major deliberately.
 
 6. **Add the project reference** for this package to the root `tsconfig.json`.
 

@@ -47,8 +47,9 @@ push to main
   ├─ GUARD: fail if .mise/ is tracked             ← after gates, before release
   ├─ conventional-changelog-action  (computes version only;
   │    skip-commit / skip-tag / git-push all off)
+  │    prev version comes from the newest git tag, NOT package.json
   │      └─ skipped == 'true'  ─→ run ends green, nothing published
-  ├─ GUARD: if previous version is 0.0.1, computed version MUST be 1.0.0
+  ├─ GUARD: if prev tag is v0.0.1, computed version MUST be 1.0.0
   │                                                ← BEFORE the bump commit
   ├─ yarn workspaces foreach --all version <v> --deferred ; yarn version apply --all
   ├─ commit "chore(release): v<v> [skip ci]"       ← bump lands before publish
@@ -81,13 +82,20 @@ pipeline, the manual bootstrap publishes, and the `yarn pack` verification.
 
 ### Versioning: `0.0.1` → `1.0.0`
 
-Placeholders publish at `0.0.1`. The release action computes
-`semver.inc(version, releaseType)` with no special handling for `0.x`, and its
-default `angular` preset classifies a `BREAKING CHANGE:` footer as `major`, so
-`0.0.1` → `1.0.0`. The footer form is required — `feat!:` exclamation detection
-is unreliable in that preset. A guard aborts the run if the computed version is
-not `1.0.0` on that first release, because a wrong version published once is
-permanent.
+Placeholders publish at `0.0.1`, and the bootstrap commit is **tagged `v0.0.1`**.
+The tag is not decoration — it is where the version actually comes from. Because
+this pipeline configures the release action not to create its own release commit,
+the action ignores `package.json` entirely and derives the previous version from
+the newest matching git tag, reporting none when no tag exists. Its
+`fallback-version` input has no default, so with no tag the first release would
+compute a hardcoded `0.1.0` no matter what the commit message said.
+
+Given the seed tag, the action computes `semver.inc('0.0.1', releaseType)` with
+no special handling for `0.x`, and its default `angular` preset classifies a
+`BREAKING CHANGE:` footer as `major` — so `0.0.1` → `1.0.0`. The footer form is
+required; `feat!:` exclamation detection is unreliable in that preset. A guard
+aborts the run if the computed version is not `1.0.0` on that first release,
+because a wrong version published once is permanent.
 
 ### Test orchestration
 
@@ -126,10 +134,12 @@ guard. The mise work in flight covers phase 2 only.
 - **The emulator port numbers stay as they are.** They were chosen to avoid
   colliding with Okven's emulators; that constraint is gone after the move, but
   changing them means changing three files in lockstep for no benefit.
-- **Phase 1's quality commands are stubs where they must be.** A skeleton with no
-  TypeScript sources and no tests cannot run a real `tsc --build` over package
-  references that do not exist. Task 1.1 makes them trivially green and task 2.1
-  replaces them; REQ-QUAL-3d forbids leaving the phase-1 shapes in place.
+- **Phase 1's `build` and test commands are stubs.** A solution `tsconfig.json`
+  with an empty `files` list and an empty `references` array does not compile — it
+  fails with `TS18002` — and there are no tests to run. Task 1.1 makes all four
+  commands trivially green and task 2.1 replaces them with the real project build
+  and per-package test orchestration; REQ-QUAL-3d forbids leaving the phase-1
+  shapes in place.
 
 ## Phases
 
@@ -164,14 +174,14 @@ packed-consumer verification needs all three packages present and building.
 
 | File                            | Task                                                      | Phase | Requirements                                                                                                     |
 | ------------------------------- | --------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------- |
-| `01_01_repo_skeleton.md`        | Root toolchain, configs, and quality commands             | 1     | REQ-REPO-2, REQ-REPO-3, REQ-REPO-6, REQ-TOOL-1..7, REQ-QUAL-1, REQ-QUAL-4, REQ-QUAL-4a, REQ-QUAL-6, REQ-QUAL-6a, REQ-QUAL-7 |
+| `01_01_repo_skeleton.md`        | Root toolchain, configs, and quality commands             | 1     | REQ-REPO-2, REQ-REPO-3, REQ-REPO-6, REQ-TOOL-1..7 (except 1a), REQ-QUAL-1, REQ-QUAL-4, REQ-QUAL-6, REQ-QUAL-6a, REQ-QUAL-7 |
 | `01_02_release_workflow.md`     | `publish.yml`, dependency automation, guards              | 1     | REQ-PUB-1..10, REQ-VER-3, REQ-VER-5a, REQ-VER-6, REQ-VER-6a, REQ-VER-7, REQ-DEP-1..4, REQ-GUARD-1..3, REQ-TEST-5, REQ-BOOT-8 |
 | `01_03_placeholders_and_docs.md`| Placeholder packages and maintainer documentation         | 1     | REQ-PKG-1, REQ-PKG-2, REQ-BOOT-1, REQ-BOOT-2, REQ-BOOT-2a, REQ-BOOT-2b, REQ-BOOT-3, REQ-BOOT-7, REQ-DOC-1, REQ-DOC-1a |
-| `01_04_create_repo_and_stop.md` | Create the GitHub repo, push `main`, hand off             | 1     | REQ-REPO-5, REQ-BOOT-4, REQ-BOOT-5, REQ-BOOT-6, REQ-PUB-2                                                        |
+| `01_04_create_repo_and_stop.md` | Create the GitHub repo, seed `v0.0.1`, push, hand off     | 1     | REQ-REPO-5, REQ-BOOT-4, REQ-BOOT-5, REQ-BOOT-6, REQ-PUB-2, REQ-VER-5b                                            |
 | `02_01_move_protocol.md`        | Copy `firebase-kit-protocol`; real build/lint/test wiring | 2     | REQ-REPO-1, REQ-REPO-3, REQ-QUAL-1, REQ-QUAL-2, REQ-QUAL-3, REQ-QUAL-3c, REQ-QUAL-3d, REQ-QUAL-3f, REQ-QUAL-5, REQ-QUAL-5a, REQ-QUAL-6b |
 | `02_02_move_client.md`          | Copy `firebase-kit-client`; lint fallout; unit tests      | 2     | REQ-REPO-1, REQ-REPO-4, REQ-QUAL-3a, REQ-QUAL-3e, REQ-QUAL-4, REQ-QUAL-4a, REQ-TEST-1, REQ-TEST-2, REQ-TEST-6      |
 | `02_03_move_admin.md`           | Copy `firebase-kit-admin`; emulator tests in CI           | 2     | REQ-REPO-1, REQ-REPO-4, REQ-QUAL-3a, REQ-QUAL-3b, REQ-TEST-1..6                                                   |
-| `02_04_dependency_manifests.md` | Audit and correct every package manifest                  | 2     | REQ-PKG-6, REQ-PKG-8, REQ-PKG-8a, REQ-PKG-9, REQ-PKG-9a, REQ-TOOL-7, REQ-BOOT-2a                                  |
+| `02_04_dependency_manifests.md` | Audit and correct every package manifest                  | 2     | REQ-REPO-7, REQ-PKG-6, REQ-PKG-8, REQ-PKG-8a, REQ-PKG-9, REQ-PKG-9a, REQ-TOOL-7, REQ-BOOT-2a                      |
 | `03_01_package_metadata.md`     | Publication metadata, per-package LICENSE, tarball shape  | 3     | REQ-PKG-3, REQ-PKG-3a, REQ-PKG-5, REQ-PKG-7                                                                      |
 | `03_02_readmes.md`              | Root and per-package READMEs                              | 3     | REQ-DOC-1, REQ-DOC-2, REQ-DOC-3, REQ-DOC-4, REQ-DOC-5                                                            |
 | `03_03_packed_verification.md`  | Verify through a real packed consumer project             | 3     | REQ-PKG-3, REQ-PKG-4, REQ-PKG-5, REQ-DOC-4, REQ-DOC-6, REQ-DOC-6a, REQ-TOOL-1a                                   |

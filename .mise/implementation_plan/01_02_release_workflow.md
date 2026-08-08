@@ -102,6 +102,18 @@ and deviates in five specific places, each called out below.
    so a push with no release-worthy commits ends green having published nothing
    and tagged nothing.
 
+   **Know where the previous version comes from.** Because this configuration
+   disables the action's own release commit, the action does *not* read
+   `package.json` — it derives the previous version from the newest matching
+   **git tag** (default prefix `v`), and reports none when no tag exists. Its
+   `fallback-version` input has no default, so with no tags it produces a
+   hardcoded `0.1.0` regardless of commit footers. This is why task 1.4 seeds a
+   `v0.0.1` tag, and why the checkout in step 4 fetches full history: without
+   tags the version computation is meaningless.
+
+   Do **not** set `fallback-version`. It would paper over a genuinely missing tag
+   on some later release rather than failing visibly.
+
    No `CHANGELOG.md` is committed — changelog content lives in the GitHub release
    notes.
 
@@ -147,12 +159,25 @@ and deviates in five specific places, each called out below.
     changelog tooling scans for on the next release (`v<version>`). Creating it
     last means a tag existing is evidence the whole release landed.
 
-13. **`.github/dependabot.yml`.** Copy scdate's: weekly, npm at `/` plus
+    Set the release **body to the generated changelog** the changelog step
+    produced — the template does this and it is easy to drop, leaving releases
+    with an empty body. The notes are the only place changelog content lives,
+    since no `CHANGELOG.md` is committed.
+
+13. **Do not weaken step failure semantics.** Each publish step must fail the run
+    and prevent the following ones. GitHub Actions gives this by default, but
+    only as long as the step conditions do not override it: never add
+    `continue-on-error`, and never write a condition using `always()` — a
+    condition like `always() && <skipped check>` would keep publishing the
+    remaining packages after one failed, which is precisely the half-published
+    state the recovery procedure exists to avoid.
+
+14. **`.github/dependabot.yml`.** Copy scdate's: weekly, npm at `/` plus
     github-actions at `/`, with the `dev-non-major`, `prod-non-major`, and
     `actions-non-major` groups so non-major updates arrive grouped rather than as
     one PR per package.
 
-14. **`.github/workflows/dependabot.yml`.** Copy scdate's auto-merge workflow,
+15. **`.github/workflows/dependabot.yml`.** Copy scdate's auto-merge workflow,
     with two deviations. First, **exclude all major updates from auto-merge, for
     every ecosystem** — scdate excludes only github-actions majors (fourth
     deliberate deviation). Second, use the same build → lint → test order as
@@ -206,6 +231,9 @@ cannot be exercised by the repository's own tests. Substitute verification:
       `yarn npm publish --access public` and provenance enabled
 - [ ] Every step after the changelog step is conditional on it not having skipped
 - [ ] The `1.0.0` guard also requires that a version was computed
+- [ ] `fallback-version` is **not** set on the changelog step
+- [ ] The GitHub release body is the generated changelog, not empty
+- [ ] No step uses `continue-on-error`, and no step condition uses `always()`
 - [ ] Dependabot auto-merge excludes majors for **all** ecosystems
 - [ ] The dependabot workflow provisions Java and the emulator cache
 - [ ] `actionlint` (or a YAML parse plus manual expression review) is clean

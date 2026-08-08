@@ -8,7 +8,8 @@ consumers at runtime, and pin `firebase-tools` consistently.
 
 ## Requirements addressed
 
-REQ-PKG-6, REQ-PKG-8, REQ-PKG-8a, REQ-PKG-9, REQ-PKG-9a, REQ-TOOL-7, REQ-BOOT-2a
+REQ-REPO-7, REQ-PKG-6, REQ-PKG-8, REQ-PKG-8a, REQ-PKG-9, REQ-PKG-9a, REQ-TOOL-7,
+REQ-BOOT-2a
 
 ## Background
 
@@ -25,9 +26,16 @@ to be established by reading each package's imports against its own manifest.
 
 Known gaps found during planning:
 
-- **`@types/node` is declared only at Okven's root.** All three packages need it:
-  `process.env` in many places, `node:crypto` in `firebase-kit-admin`, `node:path`
-  in both vitest configs, and `import.meta.dirname`.
+- **`@types/node` is declared only at Okven's root**, and reaches these packages
+  purely by hoisting. Which packages actually need it differs — establish this per
+  package rather than adding it everywhere, because REQ-PKG-8 forbids declaring
+  what is unused just as much as omitting what is used. As a starting point:
+  `firebase-kit-admin` uses `node:crypto`, `process.env`, and `import.meta.dirname`
+  in its vitest config; `firebase-kit-client` uses `node:path` in its vitest
+  config and `import.meta.dirname`, but has no `process.env` usage;
+  `firebase-kit-protocol` is three files of types and constants with a single
+  relative import and no vitest config, and very likely needs nothing. Verify each
+  rather than trusting this list.
 - **`firebase-kit-admin` declares three optional peers**, and one of them is
   wrong. The rule: a dependency with a runtime (value, not type-only) import
   reachable from a **production** entry point must not be optional, because the
@@ -86,32 +94,40 @@ Known gaps found during planning:
    `firestore-snapshot-utils`, `scdate-testing`, `fake-indexeddb/auto`, `vitest`,
    `node:path`, `node:crypto`.
 
-2. **Declare `@types/node` where it is needed.** Follow the template repository's
-   convention, where each package declares its own development dependencies
-   rather than relying on the root.
+2. **Declare `@types/node` in each package that actually needs it, and not in the
+   others.** Follow the template repository's convention, where each package
+   declares its own development dependencies rather than relying on the root. A
+   package that uses no Node built-ins and no `import.meta` should not declare it.
 
-3. **Change `betterbe` from an optional peer to a required peer** in
+3. **Confirm the packages are still free of any dependency on the Okven
+   repository.** Collect the bare specifiers again after all the copies have
+   landed and confirm none resolves to an `@okv/*` package, and that no
+   configuration file references a path outside this repository. This held at the
+   source, but nothing has re-checked it since the copies, and it is the
+   assumption the whole extraction rests on.
+
+4. **Change `betterbe` from an optional peer to a required peer** in
    `firebase-kit-admin`. Leave `firestore-snapshot-utils` and `vitest` optional.
    This is the only optional-peer change in this task.
 
-4. **Leave `getsetdel` at `^2.0.0`** in `firebase-kit-client`. Task 3.2 will note
+5. **Leave `getsetdel` at `^2.0.0`** in `firebase-kit-client`. Task 3.2 will note
    the required major in that package's README so a consumer is not surprised by
    the resolution conflict.
 
-5. **Pin `firebase-tools` identically** at the root and in `firebase-kit-admin`,
+6. **Pin `firebase-tools` identically** at the root and in `firebase-kit-admin`,
    at an exact version.
 
-6. **Declare development tooling per package.** The linter, TypeScript, and the
+7. **Declare development tooling per package.** The linter, TypeScript, and the
    strict tsconfig base are invoked by each package's own `lint` and `build`
    scripts, so each package declares them — this is what the template repository
    does. Tooling with no per-package script (the formatter, the git-hook
    machinery) may stay at the root alone.
 
-7. **Confirm `sideEffects: false` survived** on all three packages. Consumer
+8. **Confirm `sideEffects: false` survived** on all three packages. Consumer
    bundlers rely on it for tree-shaking, and it is easy to drop when rewriting a
    manifest.
 
-8. **Reinstall and commit the lockfile** so the manifest changes are reflected.
+9. **Reinstall and commit the lockfile** so the manifest changes are reflected.
 
 ## Testing suggestions
 
@@ -147,7 +163,10 @@ verify structurally and by the existing suites:
 
 - [ ] For each package, the bare-specifier set was collected and reconciled
       against the manifest in both directions, and the result recorded
-- [ ] `@types/node` is declared by every package that needs it
+- [ ] `@types/node` is declared by every package that needs it, and by no package
+      that does not
+- [ ] No package imports an `@okv/*` module and no config references a path
+      outside this repository — re-verified after all copies landed
 - [ ] `firebase-kit-admin` declares `betterbe` as a **required** peer
 - [ ] `firestore-snapshot-utils` and `vitest` remain **optional** peers
 - [ ] `firebase-kit-client` still declares `getsetdel` at `^2.0.0`, unwidened

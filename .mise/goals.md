@@ -88,14 +88,26 @@ emulator tests and scdate's does not.
    matching scdate and getsetdel. Dependabot PRs are covered by
    `dependabot.yml`.
 8. **Placeholders publish at `0.0.1`; the first real release reaches `1.0.0` via a
-   `BREAKING CHANGE:` footer.** Verified against the action's source:
-   `src/helpers/bumpVersion.js` computes `semver.inc(version, releaseType)` with
-   no 0.x special-casing, and the default `angular` preset returns `major` for a
-   breaking change, so `0.0.1` → `1.0.0`. The footer form is required — `feat!:`
-   exclamation detection is unreliable in that preset
-   (TriPSs/conventional-changelog-action#124). If the footer route misbehaves, the
-   action's `pre-changelog-generation` hook (`preVersionGeneration`) is a
-   deterministic fallback.
+   `BREAKING CHANGE:` footer — driven by a seeded `v0.0.1` git tag, not by
+   `package.json`.** Verified against the action's source, in two steps, the
+   second of which corrects the first:
+   - `src/helpers/bumpVersion.js` computes `semver.inc(version, releaseType)` with
+     no 0.x special-casing, and the default `angular` preset returns `major` for a
+     breaking change, so `0.0.1` → `1.0.0`.
+   - **But `src/index.js` only reads `package.json` when `skip-commit` is
+     false.** With `skip-commit: 'true'` — which the scdate template uses and this
+     repo copies — it branches to the *git* strategy, and `src/version/git.js`
+     takes the previous version from the newest matching git tag, or `null` when
+     none exists. `fallback-version` has no default, so with no tags the first
+     release would land on a hardcoded `0.1.0`, ignoring the footer entirely.
+
+   Therefore the bootstrap must also **create and push a `v0.0.1` tag** (the
+   action's default tag prefix is `v`). With that tag present the git strategy
+   reports `0.0.1`, the footer classifies the bump as major, and the result is
+   `1.0.0`. The footer form is still required — `feat!:` exclamation detection is
+   unreliable in that preset (TriPSs/conventional-changelog-action#124). If the
+   footer route misbehaves, the action's `pre-changelog-generation` hook
+   (`preVersionGeneration`) is a deterministic fallback.
 
 ### Deliberate deviations from scdate
 
@@ -138,7 +150,10 @@ pipeline**, so that `.mise/` never reaches `main`:
 3. Add three **placeholder packages** at version `0.0.1`, each containing only a
    minimal publishable `package.json` and a `README.md` saying the package is
    coming soon.
-4. Push `main`. The commit must be non-releasing (a `chore:` subject) so
+4. Tag the bootstrap commit `v0.0.1` and push both the branch and the tag. The
+   tag is what the release tooling reads as the previous version (decision 8);
+   without it the first real release computes `0.1.0` instead of `1.0.0`.
+   Push `main`. The commit must be non-releasing (a `chore:` subject) so
    `conventional-changelog-action` reports `skipped == 'true'` and every publish
    step no-ops — OIDC is not configured yet and a publish attempt would fail.
    The skeleton's build, lint, and test configuration must be consistent with its

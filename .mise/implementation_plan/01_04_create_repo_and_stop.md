@@ -8,7 +8,7 @@ branch onto the new `main`, and then **stop** and hand off to the maintainer.
 
 ## Requirements addressed
 
-REQ-REPO-5, REQ-BOOT-4, REQ-BOOT-5, REQ-BOOT-6, REQ-PUB-2
+REQ-REPO-5, REQ-BOOT-4, REQ-BOOT-5, REQ-BOOT-6, REQ-PUB-2, REQ-VER-5b
 
 ## Background
 
@@ -58,7 +58,17 @@ commits.
    version-bump push — `MAINTAINERS.md` covers this, and the maintainer owns the
    decision, but do not create the problem here.
 
-4. **Push `main`.**
+4. **Tag the bootstrap commit `v0.0.1`, then push `main` and the tag.**
+
+   This tag is load-bearing and easy to omit. The release tooling is configured
+   not to create its own release commit, and in that mode it derives the previous
+   version from the newest matching git tag — **not** from `package.json`. Its
+   fallback input has no default, so with no tag present the first real release
+   computes a hardcoded `0.1.0` no matter what the commit message says, and the
+   `1.0.0` guard added in task 1.2 aborts the release. The tag prefix must be `v`,
+   matching what the tooling scans for.
+
+   Push the tag explicitly — pushing the branch alone does not carry it.
 
 5. **Watch the workflow run and confirm it is green.** Expected behavior: install,
    build, lint, and test all pass on the source-free skeleton; the `.mise/` guard
@@ -126,6 +136,8 @@ this task is the live workflow run itself:
 - [ ] `main` contains the full phase-1 skeleton and no `.mise/` directory
 - [ ] The commit subject pushed to `main` is non-release-worthy
 - [ ] The public repository `ericvera/firebase-kit` exists
+- [ ] The bootstrap commit is tagged `v0.0.1` and the tag is **pushed** — verify
+      it is visible on the remote, not just locally
 - [ ] The workflow run on the push is **green**
 - [ ] The run log shows the changelog step skipping and all publish steps bypassed
 - [ ] No package exists on npmjs.com; no tag and no GitHub release were created

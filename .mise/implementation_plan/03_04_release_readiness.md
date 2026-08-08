@@ -24,12 +24,21 @@ republishing a version.
 
 ### How `0.0.1` becomes `1.0.0`
 
-Everything is currently at version `0.0.1` — the root and all three packages —
-matching the placeholders published during the bootstrap. The release action
-computes the next version as `semver.inc(currentVersion, releaseType)` with **no
-special handling for `0.x`**, and its default preset classifies a
-`BREAKING CHANGE:` footer as a `major` bump. So `0.0.1` + a breaking change →
-`1.0.0`.
+The previous version comes from the **`v0.0.1` git tag** that task 1.4 seeded on
+the bootstrap commit — not from `package.json`. The release action is configured
+not to create its own release commit, and in that mode it reads the newest
+matching git tag instead of any version file. (Its fallback input is unset and
+has no default, so with no tag it would produce a hardcoded `0.1.0` regardless of
+the commit message.)
+
+Given that tag, the action computes the next version as
+`semver.inc('0.0.1', releaseType)` with **no special handling for `0.x`**, and its
+default preset classifies a `BREAKING CHANGE:` footer as a `major` bump. So
+`0.0.1` + a breaking change → `1.0.0`.
+
+The root and all three packages also read `0.0.1`, matching the placeholders
+published during the bootstrap. That uniformity matters for lockstep versioning,
+but it is the tag, not those files, that drives the computation.
 
 **The footer form is required.** A `!`-suffixed type (`feat!:`) is not reliably
 detected by that preset — this is a known issue with the action, and relying on
@@ -77,6 +86,10 @@ No source files change. This task verifies, and prepares a commit message.
 2. **Confirm the lockstep version is uniform.** The root and all three packages
    must all read `0.0.1`. The release workflow sets them together, so a
    divergence here means something bypassed the intended flow.
+
+   **Also confirm the `v0.0.1` tag exists on the remote.** It is what the release
+   tooling reads as the previous version; without it the run computes `0.1.0` and
+   the guard aborts. Check the remote, not just the local clone.
 
 3. **Confirm no test was lost, skipped, or weakened** relative to the Okven
    source across the whole move. Compare the test file inventory of each package
@@ -156,6 +169,7 @@ the live release run:
 - [ ] Test counts reconcile exactly: client 29 files / 149 cases; admin 48 files
       / 180 cases unit and 7 files / 21 cases emulator; protocol none
 - [ ] Root and all three packages read version `0.0.1`
+- [ ] The `v0.0.1` tag exists **on the remote**
 - [ ] No test was lost, skipped, or weakened relative to the Okven source
 - [ ] `yarn format` is a no-op; `yarn lint`, `yarn build`, `yarn test` all pass
 - [ ] The emulator suite runs with no real Firebase project or credentials

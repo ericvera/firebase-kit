@@ -38,7 +38,8 @@ It publishes 10 entry points: `.`, `./auth`, `./callable`, `./errors`,
 `src/internal/` is deliberately not exported by any of them.
 
 **`./mocks` is a real published entry point**, not test scaffolding, despite the
-name — it ships 8 mock factories consumers use in their own tests. Only
+name — its barrel re-exports 7 mock factories plus a types module, for consumers
+to use in their own tests. Only
 `__mocks__/` (module shims) and `__test__/` (fixtures) are excluded from the
 package.
 
@@ -119,8 +120,14 @@ The 7 emulator test files live in exactly two directories: `src/firestore/`
    make the emulator start with the wrong (or no) configuration; either invoke it
    with the package as cwd or add an explicit config path.
 
-   Task 2.4 handles the remaining dependency work, including the optional-peer
-   corrections and the `firebase-tools` pin.
+   **Set the version to `0.0.1`**, matching the root and the published
+   placeholder. Okven's manifest reads `0.0.0`; copying that verbatim breaks the
+   lockstep invariant and would not surface until task 3.4.
+
+   **Carry the dependency declarations over too** — runtime, peer, optional-peer,
+   and development — so the package installs, builds, and tests within this task.
+   Task 2.4 *audits* and corrects them, including the optional-peer change and
+   the `firebase-tools` pin; it does not create them from nothing.
 
 5. **Add the project reference** to the root `tsconfig.json`.
 

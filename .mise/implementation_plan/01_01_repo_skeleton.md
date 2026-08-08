@@ -8,9 +8,9 @@ all pass, while it still contains no package source code.
 
 ## Requirements addressed
 
-REQ-REPO-2, REQ-REPO-3, REQ-REPO-6, REQ-TOOL-1, REQ-TOOL-1a, REQ-TOOL-2,
-REQ-TOOL-3, REQ-TOOL-4, REQ-TOOL-5, REQ-TOOL-6, REQ-TOOL-7, REQ-QUAL-1,
-REQ-QUAL-4, REQ-QUAL-4a, REQ-QUAL-6, REQ-QUAL-6a, REQ-QUAL-7
+REQ-REPO-2, REQ-REPO-3, REQ-REPO-6, REQ-TOOL-1, REQ-TOOL-2, REQ-TOOL-3,
+REQ-TOOL-4, REQ-TOOL-5, REQ-TOOL-6, REQ-TOOL-7, REQ-QUAL-1, REQ-QUAL-4,
+REQ-QUAL-6, REQ-QUAL-6a, REQ-QUAL-7
 
 ## Background
 
@@ -79,6 +79,13 @@ reason is given — do not "correct" it back.
    and never published, so they would be dead configuration implying hook
    suppression is handled when it is not.
 
+   Declare at the root every tool the quality commands invoke — the linter and
+   its TypeScript plugin and JS config package, TypeScript itself, the strict
+   tsconfig base, the formatter, the test runner, the git-hook and staged-file
+   tooling, and the Node type definitions. Without these the commands this task
+   must leave green cannot run at all. Task 2.4 later moves per-package tooling
+   into the packages that invoke it.
+
    Include the prettier config block (`tabWidth: 2`, `semi: false`,
    `singleQuote: true`) and the lint-staged block (eslint with cache on
    `*.{ts,tsx,mjs}`, prettier write on everything else), both copied from scdate.
@@ -125,17 +132,27 @@ reason is given — do not "correct" it back.
    `packages/*/vitest.config.ts` for the configs tasks 2.2 and 2.3 will add.
 
 8. **Make the quality commands green on an empty repository.** This is the part
-   that has no template — scdate always has packages.
+   that has no template — scdate always has packages, so every shape below is
+   specific to phase 1 and is replaced in task 2.1.
    - `tsconfig.json` is solution-style with `files: []`, `include: []`, and an
-     **empty** `references` array. A `tsc --build` over references to packages
-     that do not exist fails with TS6053; task 2.1 adds the first entry.
-   - `test`, `test:unit`, and `test:emulator` must exit 0 with no packages. Make
-     them trivially succeed — for example echoing that there is nothing to run.
-     Do **not** solve this by enabling a repository-wide "pass with no tests"
-     flag: task 2.1 replaces these scripts with the real per-package
-     orchestration, and a lingering blanket tolerance flag would later mask a
-     runner misconfiguration.
+     **empty** `references` array. **This configuration cannot be compiled**: with
+     an empty `files` list and nothing in `references`, TypeScript reports
+     `error TS18002: The 'files' list in config file … is empty` and exits
+     non-zero. It stops erroring the moment `references` is non-empty, which
+     happens in task 2.1.
+   - Therefore `build` must **not** run a real compile in phase 1. Make it a stub
+     that exits 0, the same way the test scripts below are stubs. Task 2.1
+     replaces it with the real project build when the first reference exists.
+   - `test`, `test:unit`, and `test:emulator` must likewise exit 0 with no
+     packages. Make them trivially succeed — for example echoing that there is
+     nothing to run. Do **not** solve this by enabling a repository-wide "pass
+     with no tests" flag: task 2.1 replaces these scripts with the real
+     per-package orchestration, and a lingering blanket tolerance flag would later
+     mask a runner misconfiguration.
    - `lint` and `format` work as-is over the config files.
+   - Leave a comment in the root `package.json` scripts, or in the commit message,
+     recording that `build`, `test`, `test:unit`, and `test:emulator` are phase-1
+     stubs — so task 2.1 replaces them rather than building on top of them.
 
 9. **Install with an immutable lockfile in CI.** Commit `yarn.lock`. The
    workflow in task 1.2 will pass the immutable flag explicitly rather than
@@ -160,9 +177,11 @@ by running the quality commands directly and by a clean-clone check.
 
 ## Gotchas
 
-- **`yarn build` on an empty solution tsconfig.** If `references` is non-empty
-  and points at a directory without a `tsconfig.json`, the build fails with
-  TS6053 rather than doing nothing. Keep it empty until task 2.1.
+- **An empty solution tsconfig cannot be compiled at all.** `files: []` plus an
+  empty `references` gives `TS18002`, which is why `build` is a stub in this
+  task. And if `references` points at a directory that has no `tsconfig.json`,
+  the failure is `TS5083` (cannot read file). Neither is the "does nothing
+  quietly" behavior one might expect.
 - **Husky will not install via `prepare`.** Yarn Berry does not run that
   lifecycle script. The after-install plugin plus `localAfterInstall` is the only
   mechanism that works; if the hook does not appear, check the plugin is
@@ -175,6 +194,9 @@ by running the quality commands directly and by a clean-clone check.
 ## Verification checklist
 
 - [ ] `yarn install --immutable` succeeds from a clean clone
+- [ ] Root `package.json` declares every tool the quality commands invoke
+- [ ] `build`, `test`, `test:unit`, `test:emulator` are stubs, recorded as such,
+      and `tsconfig.json` has an empty `references` array
 - [ ] `yarn format`, `yarn lint`, `yarn build`, `yarn test`, `yarn test:unit`,
       `yarn test:emulator` all exit 0 on the empty skeleton
 - [ ] `git check-ignore -v .mise` reports no match

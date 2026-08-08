@@ -171,8 +171,16 @@ output that does not exist.
 - **REQ-VER-5:** The release commit that produces `1.0.0` MUST carry a
   `BREAKING CHANGE:` footer. A `!`-suffixed type (`feat!:`) MUST NOT be relied on
   for this, because the configured preset does not detect it reliably.
+- **REQ-VER-5b:** The bootstrap commit MUST be tagged `v0.0.1` and that tag MUST
+  be pushed. The release tooling derives the previous version from git tags, not
+  from `package.json`, whenever it is configured not to create its own release
+  commit — which is how this repository configures it. With no tag present the
+  first real release computes `0.1.0` regardless of the commit footer, so the
+  seed tag is what makes REQ-VER-4 reachable. The tag format MUST match
+  REQ-VER-6a.
 - **REQ-VER-5a:** When a release version has actually been computed *and* the
-  previous version is the `0.0.1` bootstrap placeholder — that is, on the first
+  previous version the tooling reports is the `0.0.1` bootstrap placeholder (per
+  REQ-VER-5b, that comes from the seed tag) — that is, on the first
   real release and only then — the workflow MUST abort if that computed version is
   anything other than `1.0.0`. The "a version was computed" condition is not
   optional: without it the check also fires on the phase-1 push and on every
