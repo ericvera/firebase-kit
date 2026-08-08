@@ -102,6 +102,14 @@ output that does not exist.
   repository **including the subdirectory** that holds it, and the MIT license —
   so the npm package page shows what the package is, is discoverable by search,
   and links to its own source rather than the monorepo root.
+- **REQ-PKG-8a:** A dependency with a **runtime** (value, not type-only) import
+  reachable from a published entry point MUST NOT be declared as an *optional*
+  peer. `firebase-kit-admin` currently violates this twice: `betterbe` is imported
+  for a value reachable via `./validation`, and `firestore-snapshot-utils` for
+  values reachable via `./testing`, yet both are marked optional. A consumer
+  therefore gets no install-time warning and a module-resolution failure at
+  runtime. Each MUST become a required peer, or the entry point reaching it MUST
+  stop importing it at runtime.
 - **REQ-PKG-8:** Each package's dependency declarations — runtime, peer,
   optional-peer, **and development** — MUST match what the package actually uses.
   Development dependencies are explicitly in scope. Note that a green build is
@@ -138,9 +146,13 @@ output that does not exist.
 - **REQ-VER-5:** The release commit that produces `1.0.0` MUST carry a
   `BREAKING CHANGE:` footer. A `!`-suffixed type (`feat!:`) MUST NOT be relied on
   for this, because the configured preset does not detect it reliably.
-- **REQ-VER-5a:** When the previous version is the `0.0.1` bootstrap placeholder —
-  that is, on the first real release and only then — the workflow MUST abort if
-  the computed version is anything other than `1.0.0`. The check MUST run
+- **REQ-VER-5a:** When a release version has actually been computed *and* the
+  previous version is the `0.0.1` bootstrap placeholder — that is, on the first
+  real release and only then — the workflow MUST abort if that computed version is
+  anything other than `1.0.0`. The "a version was computed" condition is not
+  optional: without it the check also fires on the phase-1 push and on every
+  non-releasing push before the first release, where no version exists and
+  REQ-BOOT-2a requires the run to pass. The check MUST run
   **before** the version-bump commit of REQ-PUB-7, not merely before publishing:
   aborting afterwards would leave the wrong version committed on `main` as the
   base for the next computation. A wrong version published once is permanent — npm
@@ -172,7 +184,9 @@ output that does not exist.
   commits MUST complete without publishing anything and without creating a tag,
   and MUST NOT fail *for lack of a release*. It MUST still run and be gated by
   build, lint, and tests — since push-to-`main` is this repository's only CI, a
-  non-releasing push is otherwise unchecked.
+  non-releasing push is otherwise unchecked. The one exception is the workflow's
+  own version-bump commit (REQ-PUB-7), which MUST NOT trigger a run at all;
+  it carries only a version change that the run which produced it already gated.
 - **REQ-PUB-3:** A release MUST NOT publish unless the repository's build, lint,
   and full test suite (including emulator tests) all pass first.
 - **REQ-PUB-4:** Publishing MUST authenticate through npm Trusted Publishing
@@ -224,7 +238,9 @@ output that does not exist.
   That root declaration MUST persist into phase 2, where `firebase-kit-admin` also
   declares it per REQ-PKG-8; the emulator cache key is derived from the
   root-resolved version, so removing the root declaration later would break
-  REQ-TEST-5.
+  REQ-TEST-5. The root and package declarations MUST pin the same exact version:
+  the cache key is derived from resolving the name across the workspace, and two
+  differing locators would produce a malformed key.
 - **REQ-BOOT-2b:** The placeholder packages MUST declare no dependencies at all.
   A placeholder carrying a `workspace:` dependency would, if packed with the wrong
   tool, publish an uninstallable `0.0.1` permanently (REQ-TOOL-1a); declaring none
@@ -268,6 +284,10 @@ output that does not exist.
   alone and emulator tests alone, named exactly `yarn test:unit` and
   `yarn test:emulator`, plus `yarn test` running both.
 - **REQ-QUAL-3:** The full test command MUST run both unit and emulator tests.
+- **REQ-QUAL-3f:** Every test command MUST build first, or otherwise guarantee
+  built output is present. Tests import `firebase-kit-protocol` by package name,
+  which resolves through its `exports` to `dist`, so a test command run on a clean
+  checkout without a build cannot resolve it.
 - **REQ-QUAL-3a:** The root test commands MUST cover every package that has tests
   while preserving each package's own test setup — its setup files, its mock reset
   behavior, and the directory each package's test runner treats as its root. That
@@ -276,15 +296,17 @@ output that does not exist.
   as automatic module shims. Anchoring at the package directory instead leaves the
   tests running while silently resolving the real modules rather than the shims.
 - **REQ-QUAL-3c:** In the finished repository, a test command MUST fail if a
-  package that has test files executes zero of them. The intended mechanism is
-  structural, not a tolerance flag: a package with no tests
-  (`firebase-kit-protocol`) simply has no test project declared, and the emulator
-  command targets only the package that has emulator tests
-  (`firebase-kit-admin`) — under which the runner's default "no tests is a
-  failure" behavior already enforces this everywhere it applies. A repository-wide
-  "pass with no tests" setting MUST NOT be left enabled in the finished
-  repository, because it would mask a runner misconfiguration introduced during
-  the move and let the release gate pass green having executed none of the suite.
+  package that has test files executes zero of them. The check MUST be effective
+  **per package**: the test runner evaluates "no tests ran" once across an entire
+  run, so a single run spanning both packages would still exit successfully when
+  one package contributes zero files and the other contributes many. The root
+  commands MUST therefore invoke the runner once per package rather than once
+  across the workspace, so that each package's result is judged on its own.
+  A repository-wide "pass with no tests" setting MUST NOT be left enabled in the
+  finished repository. Packages that legitimately have no tests
+  (`firebase-kit-protocol` for both commands, `firebase-kit-client` for the
+  emulator command) MUST be excluded from the relevant command's package list
+  rather than accommodated by a tolerance flag.
 - **REQ-QUAL-3d:** REQ-QUAL-3c binds the phase-2 repository. Phase 1 has no tests
   at all, so whatever accommodation makes REQ-BOOT-2a's skeleton run pass MUST be
   removed as part of phase 2 rather than left in place.
@@ -304,7 +326,11 @@ output that does not exist.
   configuration in full (all four ports, single-project mode off, emulator UI
   off) and its Firestore rules, the `demo-admin-tests` project id, the restriction
   to the auth and firestore emulators only, and the fixed `TZ=Etc/Universal`
-  timezone the tests are written against. The existing invocation passes no
+  timezone the tests are written against, and the build that must precede it —
+  the existing test scripts are all prefixed with a build because tests import
+  `firebase-kit-protocol` by package name, which resolves through its `exports` to
+  built output that will not exist on a clean checkout. The existing invocation
+  passes no
   explicit config path and so depends on running with the admin package as the
   working directory; a root-level command MUST reproduce that. The auth and
   firestore host/port pair is additionally duplicated in the emulator test setup
@@ -322,11 +348,11 @@ output that does not exist.
   require a suppression MUST be raised to the maintainer as a blocker, and the work
   MUST NOT be reported complete with an unresolved one outstanding. The ban itself
   is checkable: the moved sources carry no `eslint-disable` comments today, so the
-  finished tree MUST contain none either. Type assertions used to silence a
-  finding (`as`, `as unknown as`, non-null assertions) count as suppression for
-  this purpose and are equally forbidden — they are the loophole a
-  comment-only ban would leave open, and they defeat the type checking the
-  stricter rules exist to provide.
+  finished tree MUST contain none either. Introducing a **new** type assertion
+  (`as`, `as unknown as`, non-null) to silence a finding counts as suppression and
+  is equally forbidden — it is the loophole a comment-only ban would leave open.
+  This applies only to assertions this work adds: the sources already carry
+  roughly 200, and removing or rewriting those is out of scope.
 - **REQ-QUAL-5:** The build MUST type-check all three packages under the
   strictest shared TypeScript base configuration the maintainer's other library
   repositories use (`@tsconfig/strictest`), and MUST emit type declarations that
@@ -477,7 +503,7 @@ output that does not exist.
   published version is never one whose Firestore integration tests were skipped.
   REQ-TEST-5 extends the same cost to dependency-update checks, which would
   otherwise fail for lack of a Java runtime.
-- **Seven requirements deliberately deviate from the scdate template**, which the
+- **Eight requirements deliberately deviate from the scdate template**, which the
   goals had assumed could be copied verbatim. Each was checked against scdate
   rather than presumed: REQ-DEP-4 (scdate auto-merges npm majors), REQ-PUB-5
   (scdate publishes with no provenance, because `yarn npm publish` does not
@@ -487,8 +513,10 @@ output that does not exist.
   declare a `license` field and a `repository` object, so only those three items
   are deviations), REQ-QUAL-5a (scdate keeps doc comments in declarations while
   the Okven tsconfigs strip them — here scdate is the one being followed and Okven
-  the one being departed from), and REQ-QUAL-7 (scdate carries `pinst`
-  publish-lifecycle scripts that are inert under Yarn).
+  the one being departed from), REQ-QUAL-7 (scdate carries `pinst`
+  publish-lifecycle scripts that are inert under Yarn), and REQ-TOOL-3 (scdate's
+  workflows install with a bare `yarn`, relying on the CI default rather than
+  requiring an immutable lockfile explicitly).
 - **Two goals items are process concerns with no requirement of their own**:
   rebasing the mise feature branch onto the new `main` after phase 1, and having
   the plan stage surface the ESLint fallout count before fixing starts. Both
