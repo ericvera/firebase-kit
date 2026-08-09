@@ -65,11 +65,15 @@ jobs:
       # and before the changelog so it prevents any version bump, publish, tag,
       # or release. Unconditional, so it also fails a push that carries .mise/
       # but contains no release-worthy commits.
+      # The `:(glob)` prefix is required: with default pathspec magic the
+      # trailing-slash directory shorthand only applies to a literal prefix, so
+      # a bare `**/.mise/` matches nothing and only a root-level `.mise/` would
+      # be caught.
       - name: Ensure no .mise directory is committed
         run: |
-          if git ls-files -- '.mise/' '**/.mise/' | grep -q .; then
+          if git ls-files -- ':(glob)**/.mise/**' | grep -q .; then
             echo "::error::.mise directory is tracked in git - remove it before pushing to main"
-            git ls-files -- '.mise/' '**/.mise/'
+            git ls-files -- ':(glob)**/.mise/**'
             exit 1
           fi
 
@@ -91,14 +95,27 @@ jobs:
       # must be exactly 1.0.0. Runs before the version bump so an abort never
       # leaves a wrong version committed on main as the base for the next
       # computation.
+      #
+      # The previous version must be read from `old_version`, not from
+      # package.json: with `skip-commit: 'true'` the action derives the previous
+      # version from the newest matching git tag and never reads package.json,
+      # so package.json can disagree with what the computation actually used --
+      # for example after a partially published release, where the bump commit
+      # landed but the tag (created last) did not. `old_version` is empty when
+      # no tag was found at all, which is exactly the case where the action
+      # silently falls back to a hardcoded version.
       - name: Ensure the first release is 1.0.0
         if: ${{ steps.changelog.outputs.skipped == 'false' }}
         env:
           COMPUTED_VERSION: ${{ steps.changelog.outputs.version }}
+          PREVIOUS_VERSION: ${{ steps.changelog.outputs.old_version }}
         run: |
-          current_version=$(jq -r '.version' package.json)
-          if [ "$current_version" = '0.0.1' ] && [ "$COMPUTED_VERSION" != '1.0.0' ]; then
-            echo "::error::First release must be 1.0.0 but the computed version is $COMPUTED_VERSION"
+          if [ -z "$PREVIOUS_VERSION" ]; then
+            echo "::error::No previous release tag was found, so the computed version $COMPUTED_VERSION came from a hardcoded fallback instead of the last release. Check that the v0.0.1 seed tag exists on main and that the checkout fetched tags (fetch-depth: 0)."
+            exit 1
+          fi
+          if [ "$PREVIOUS_VERSION" = '0.0.1' ] && [ "$COMPUTED_VERSION" != '1.0.0' ]; then
+            echo "::error::The previous release tag is v0.0.1, the bootstrap placeholder, so this is the first real release and must be 1.0.0 - but the computed version is $COMPUTED_VERSION. Check the commit footers on this push: a first release needs a breaking-change commit. If a previous run already published at 1.0.0, do not release from this state."
             exit 1
           fi
 
