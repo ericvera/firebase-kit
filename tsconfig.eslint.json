@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+
+  "extends": ["@tsconfig/strictest/tsconfig.json"],
+  "compilerOptions": {
+    // Required for eslint.config.mjs to be included in the program for typed
+    // linting (TypeScript only pulls .mjs/.js files in when allowJs is set).
+    "allowJs": true
+  },
+  "include": [
+    "eslint.config.mjs",
+    "vitest.config.ts",
+    "packages/*/vitest.config.ts"
+  ]
+}

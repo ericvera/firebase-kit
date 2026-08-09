@@ -1,0 +1,51 @@
+{
+  "name": "@firebase-kit/monorepo",
+  "version": "0.0.1",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "-- STUBS: no packages exist yet; replace when the first package lands --": "",
+    "build": "echo 'No packages yet - nothing to build'",
+    "test": "echo 'No packages yet - nothing to test'",
+    "test:unit": "echo 'No packages yet - no unit tests to run'",
+    "test:emulator": "echo 'No packages yet - no emulator tests to run'",
+    "-- PRE-COMMIT HOOKS --": "",
+    "localAfterInstall": "husky || true"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tsconfig/strictest": "^2.0.8",
+    "@types/node": "^24.13.3",
+    "eslint": "^10.8.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.10"
+  },
+  "prettier": {
+    "tabWidth": 2,
+    "semi": false,
+    "singleQuote": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ericvera/firebase-kit.git"
+  },
+  "license": "MIT",
+  "lint-staged": {
+    "*.{ts,tsx,mjs}": "eslint --cache",
+    "*": "prettier --ignore-unknown --write"
+  },
+  "packageManager": "yarn@4.18.0"
+}
