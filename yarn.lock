@@ -149,7 +149,7 @@ __metadata:
     "@tsconfig/strictest": "npm:^2.0.8"
     "@types/node": "npm:^24.13.3"
     eslint: "npm:^10.8.0"
-    firebase-tools: "npm:15.23.0"
+    firebase-tools: "npm:15.26.0"
     husky: "npm:^9.1.7"
     lint-staged: "npm:^17.3.0"
     prettier: "npm:^3.9.6"
@@ -3076,9 +3076,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"firebase-tools@npm:15.23.0":
-  version: 15.23.0
-  resolution: "firebase-tools@npm:15.23.0"
+"firebase-tools@npm:15.26.0":
+  version: 15.26.0
+  resolution: "firebase-tools@npm:15.26.0"
   dependencies:
     "@apphosting/common": "npm:^0.0.8"
     "@electric-sql/pglite": "npm:^0.3.3"
@@ -3147,12 +3147,12 @@ __metadata:
     update-notifier-cjs: "npm:^5.1.6"
     winston: "npm:^3.0.0"
     winston-transport: "npm:^4.4.0"
-    ws: "npm:^7.5.10"
+    ws: "npm:^8.21.1"
     yaml: "npm:^2.8.3"
     zod: "npm:^4.0.0"
   bin:
     firebase: lib/bin/firebase.js
-  checksum: 10c0/a7ed0d15c1e14a5a99e9358e458e9f67db3ed7c9cfa82fa6cf2db9d971997d5e081482275babd7d3bc2ccc9682608a20d49f0cf50de0604cb99127cacba35e6d
+  checksum: 10c0/94a8eca8d7c1f57564990a793425fcf78f541c1f3336d173cf8aa44a606645dc5eadbf03b0677ed6a1a26b83dc63b8411b7d4908ca152e40cf3196a58dfdd463
   languageName: node
   linkType: hard
 
@@ -7016,18 +7016,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:^7.5.10":
-  version: 7.5.13
-  resolution: "ws@npm:7.5.13"
+"ws@npm:^8.21.1":
+  version: 8.21.3
+  resolution: "ws@npm:8.21.3"
   peerDependencies:
     bufferutil: ^4.0.1
-    utf-8-validate: ^5.0.2
+    utf-8-validate: ">=5.0.2"
   peerDependenciesMeta:
     bufferutil:
       optional: true
     utf-8-validate:
       optional: true
-  checksum: 10c0/e223726bbda5768ed58ec9252d04eda7018ef380ea122bb94e595a4d7a02b5baeb423933936576fddb8fa51b642375f7ae814bf0f6f5d9a3ce290566578a8c5a
+  checksum: 10c0/7b28dc2863ea0e2cece68d142a3eee90361021b73f750431e6d8076bb7dede5fdfdb75b3d29534b62f411261147b76b1bc80fb5cc63ab0aabd467280e85b22e0
   languageName: node
   linkType: hard
 
