@@ -129,3 +129,78 @@
 - Known and expected: the emulator setup step will fail until task 1.3 adds the
   root `firebase-tools` devDependency, since `yarn info firebase-tools` errors
   when nothing declares it. This ordering is called out in the task's Gotchas.
+
+## 1.2 (review fix) — Guard defects corrected (committed on `main`, not this branch)
+
+- Work commit: `9c8445b` on `main`, subject `chore: correct release guard
+  version source and .mise pathspec`. Deliberately a `chore:` subject — a
+  release-worthy subject would compute a version and attempt a publish once
+  `main` is pushed.
+- Key changes: `.github/workflows/publish.yml` only, two steps.
+  - **`1.0.0` guard read the wrong version source.** It used
+    `jq -r '.version' package.json`, but with `skip-commit: 'true'` the
+    changelog action takes the `skipVersionFile || skipCommit` branch and
+    derives the previous version from git tags (`src/version/git.js` →
+    `gitSemverTags`); `package.json` is never consulted by the computation.
+    Traced failure: first release computes `1.0.0`, the bump commit lands,
+    `firebase-kit-protocol@1.0.0` publishes, the client publish fails, and no
+    tag exists yet because tagging is last. A recovery `fix:` push then reads
+    tag `v0.0.1` → computes `0.0.2`, while the guard read `package.json` =
+    `1.0.0` and stayed silent — publishing client and admin at `0.0.2` beside a
+    published protocol at `1.0.0`.
+    The guard now reads `steps.changelog.outputs.old_version` (new
+    `PREVIOUS_VERSION` env var) and, whenever `skipped == 'false'`, aborts in
+    **both** failure cases: `old_version` empty (no seed tag found, the case
+    where the action silently falls back to a hardcoded version) and
+    `old_version` = `0.0.1` with a computed version other than `1.0.0`. Each
+    branch emits its own `::error::` naming the cause and what to check.
+  - **`.mise/` guard pathspec matched nothing beyond the repo root.**
+    `git ls-files -- '.mise/' '**/.mise/'` uses default pathspec magic, where
+    the trailing-slash directory shorthand applies only to a literal prefix, so
+    the second pattern was dead weight and a nested `.mise/` (plausible once
+    packages land under `packages/`) would have reached a release. Both
+    occurrences replaced with `':(glob)**/.mise/**'`.
+
+### Deviations from plan
+
+- The task file's step 9 and its checklist phrase the `1.0.0` guard as reading
+  "the current version". That wording implies `package.json`, which is the
+  defect. The guard now keys off the tag-derived `old_version` the computation
+  actually uses, and additionally fires on an empty `old_version`. Intent
+  (never let a first release be anything but `1.0.0`, and never publish off a
+  silent fallback) is unchanged and strengthened.
+
+### Verification
+
+- Pathspec fix verified **empirically**, not by reasoning, in a scratch git
+  repository holding root-level, nested, and deeply nested `.mise/` paths plus
+  near-miss decoys:
+  - old `'.mise/' '**/.mise/'` reported only `.mise/plan/x.md`, missing
+    `sub/.mise/y.md` and `packages/foo/.mise/z.md`;
+  - new `':(glob)**/.mise/**'` reported all five `.mise/` paths
+    (`.mise/top.md`, `.mise/plan/x.md`, `sub/.mise/y.md`,
+    `packages/foo/.mise/z.md`,
+    `packages/bar/.mise/deep/nested/d.md`) and matched neither `notmise/f.md`
+    nor `packages/misething.md`.
+- `old_version` confirmed to exist as an output on `v6` despite being
+  undocumented in that tag's `action.yml`: `src/index.js` calls
+  `core.setOutput('old_version', …)` on both the skipped and non-skipped paths,
+  and `src/version/git.js` sets it to `null` when `gitSemverTags` returns
+  nothing — which surfaces as an empty string in the workflow expression.
+- Guard shell logic executed directly over six input pairs: empty/`0.1.0` →
+  exit 1; `0.0.1`/`1.0.0` → pass; `0.0.1`/`0.0.2` → exit 1; `0.0.1`/`0.1.0` →
+  exit 1; `1.0.0`/`1.0.1` → pass; `1.2.0`/`2.0.0` → pass.
+- `actionlint` 1.7.12 reports 0 errors across both workflow files with its
+  integrated shellcheck active. `yarn format` leaves the file unchanged;
+  `yarn lint`, `yarn build`, `yarn test`, `yarn test:unit` all exit 0.
+- The four-scenario trace still holds: (a) non-releasing push — `skipped ==
+  'true'`, guard skipped, run green; (b) push carrying `.mise/` at **any**
+  depth — guard exits 1 before the changelog step; (c) first real release with
+  tag `v0.0.1` computing `1.0.0` — passes; (d) first real release computing
+  anything else, or with no tag at all — exits 1 before the bump commit.
+- Preserved throughout: `env:` rather than `${{ }}` interpolation inside
+  `run:`, no `continue-on-error`, no `always()`, no npm token reference.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies; the substitute verification is the scratch-repository
+  pathspec experiment, the guard-logic execution, and the `actionlint` run
+  above.
