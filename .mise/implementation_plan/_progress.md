@@ -305,3 +305,87 @@
   wiring applies. The substitute verification is the dry-run pack inspection,
   the manifest key assertion, and the cold read-through above; the publish path
   itself is exercised by the maintainer at the task 1.4 hard stop.
+
+## 1.3 (review fix) — Bootstrap step 1 rewritten for granular npm tokens (committed on `main`, not this branch)
+
+- Work commit: `c4e916b` on `main`, subject `chore: document granular npm token
+  flow in MAINTAINERS.md`. `chore:` deliberately, for the same reason as the
+  other phase-1 commits: a release-worthy subject would compute a version and
+  attempt a publish on the task 1.4 push.
+- Key changes: `MAINTAINERS.md` only, two places — bootstrap **step 1** and the
+  `--otp` bullet in the notes under **step 2**. Nothing else in the repository.
+- **The defect.** Step 1 offered a **Classic → Automation** token as the
+  simplest/primary choice and a granular token as a fallback that "also works".
+  Classic tokens no longer exist, so there is no such control on npmjs.com. This
+  is the first step of the one procedure the maintainer runs cold, after this
+  planning directory is deleted, so the gap has no in-repo recovery path.
+- Step 1 now documents the granular flow as the only route: a field-by-field
+  table (token name / **Bypass two-factor authentication** checked /
+  Packages and scopes **Read and write** + **All Packages** / Organizations
+  **No access** / shortest expiration) followed by three notes explaining the
+  non-obvious choices — Bypass 2FA is off by default and is what makes the
+  non-interactive publish possible; **All Packages** is *required*, not merely
+  convenient, because "Only select packages and scopes" can list only existing
+  packages and scopes you already own and all three names are unscoped and
+  unpublished; and write-scoped tokens are capped at **90 days**, so there is no
+  "no expiration" option (irrelevant here, since step 4 revokes the token
+  minutes later).
+- The `--otp <code>` guidance is kept as the recovery path but reworded off
+  classic-token terminology — it now names the actual cause (the token was
+  created without Bypass 2FA) and says to append `--otp` rather than start over.
+
+### Deviations from plan
+
+- None. The task file only requires step 1 to state "how the temporary npm token
+  is supplied"; the token *type* was an implementation choice and this corrects
+  it. The checklist item ("how the token is supplied") is still satisfied — that
+  mechanism (`YARN_NPM_AUTH_TOKEN` via a `read -rs` prompt) is in step 2 and is
+  untouched.
+
+### Verification
+
+- Registry facts checked against **current npm documentation**, not recollection
+  and not the reviewer's summary, because these have moved repeatedly:
+  - `docs.npmjs.com/about-access-tokens` states verbatim: "As of November 2025,
+    only Granular access tokens are supported. Legacy access tokens have been
+    removed." The GitHub changelog of 2025-12-09 confirms the revocation date
+    and that classic tokens "can no longer authenticate, be recreated, or be
+    recovered". Both reviewer dates hold.
+  - Bypass 2FA confirmed in the docs source
+    (`content/integrations/integrating-npm-with-external-services/`): the
+    checkbox is labelled **"Bypass two-factor authentication"**, "is set to
+    false by default at token creation", applies to tokens with write access,
+    and takes precedence over account- and package-level 2FA for publishing.
+    Also confirmed: the creation page has no token-type selector at all any
+    more, and the field order in the new table matches the documented UI order.
+  - **The 90-day cap is real but is not in npm's own docs** — the docs page says
+    only "at least one day in the future". It is stated in the 2025-12-09
+    changelog ("write tokens limited to 90 days maximum") and confirmed
+    empirically in `npm/documentation` issue #1864, where the cap was initially
+    unenforced in the UI (a token expiring in Oct 2027 was created in Jan 2026),
+    then enforced from March 2026 with a warning chip and disabled calendar
+    dates — and enforced **only for tokens with write access**; read-only tokens
+    still take arbitrary dates. The document's wording says "for any token with
+    write access" to match the actual behaviour rather than the changelog's
+    looser phrasing. Flagged here because the docs and the UI disagree.
+  - The "package-scoped tokens cannot create a new package" point is **not**
+    stated anywhere in npm's docs. What the docs do state is that "Only select
+    packages and scopes" selects from packages and scopes the account already
+    has access to. The document is therefore worded from that documented
+    mechanism (nothing to select, since the names are unscoped and unpublished)
+    rather than asserting an undocumented registry rule.
+  - Not carried in: the 2025-12-09 changelog advertises `npm token create` for
+    granular tokens, but the current docs page still says "You cannot create
+    granular access tokens from the CLI currently." Given the contradiction, the
+    document sticks to the website flow, which both sources agree works.
+- `yarn format` (leaves `MAINTAINERS.md` unchanged on re-run; prettier realigned
+  the new table on the first pass and that alignment is what was committed),
+  `yarn lint`, `yarn build`, `yarn test` all exit 0. The pre-commit hook ran
+  lint-staged over the file.
+- `git diff` on the work commit touches exactly one file and two hunks. All
+  in-document anchor links still resolve — no heading was renamed, and the
+  `[bootstrap step 2]` / `[bootstrap step 4]` cross-references still point at
+  the steps they name.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies; the substitute verification is the documentation cross-check
+  above plus a re-read of steps 1 through 4 as a continuous procedure.
