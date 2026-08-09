@@ -1,0 +1,66 @@
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    branches:
+      - main
+
+# Cancel if there is a build for the same branch running
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+
+    if: github.actor == 'dependabot[bot]'
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set Node version
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # This workflow is CI too: a dependency-update run that silently rewrites
+      # the lockfile defeats the point of checking it.
+      - name: Install Dependencies
+        run: yarn install --immutable
+
+      # Build must precede lint: the typed lint rules resolve types across
+      # project references.
+      - name: Build
+        run: yarn build
+
+      - name: Lint
+        run: yarn lint
+
+      # `yarn test` runs the emulator suite, which needs a Java runtime.
+      - name: Setup Firebase Tools
+        uses: ./.github/actions/setup-firebase-tools
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+
+      # Auto-merge every non-major semver update. Major bumps are excluded for
+      # every ecosystem: the test suite cannot exercise a breaking change, so
+      # they need a human review.
+      - name: Enable auto-merge for Dependabot PRs
+        if: startsWith(steps.metadata.outputs.update-type, 'version-update:semver') && steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}

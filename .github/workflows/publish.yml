@@ -1,0 +1,159 @@
+# The filename is load-bearing: npm's trusted publisher configuration names
+# `publish.yml`, so renaming this file breaks every release with an
+# authentication error that does not obviously point back here.
+name: Package publishing
+
+# Push to main only. There is deliberately no manual trigger: npm forbids
+# republishing a version, so a re-run cannot complete a partial release, and
+# because the version bump is already on main a re-run would compute a new
+# version rather than retry the failed one.
+on:
+  push:
+    branches:
+      - main
+
+# Serialize runs for the same branch, but never cancel one. Cancelling
+# mid-publish would leave some packages published at a version and others not.
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Give the default GITHUB_TOKEN write permission to commit and push the
+      # version bump back to the repository.
+      contents: write
+      # Required for the npm OIDC trusted-publishing token exchange. No npm
+      # token secret is used anywhere in this workflow.
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history so the changelog action can find the previous release
+          # tag. Without tags the version computation is meaningless.
+          fetch-depth: 0
+
+      - name: Set Node version
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: yarn install --immutable
+
+      # Build must precede lint: the typed lint rules resolve types across
+      # project references.
+      - name: Build
+        run: yarn build
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Setup Firebase Tools
+        uses: ./.github/actions/setup-firebase-tools
+
+      - name: Run tests
+        run: yarn test
+
+      # Placed after the gates so a trip still reports the state of the code,
+      # and before the changelog so it prevents any version bump, publish, tag,
+      # or release. Unconditional, so it also fails a push that carries .mise/
+      # but contains no release-worthy commits.
+      - name: Ensure no .mise directory is committed
+        run: |
+          if git ls-files -- '.mise/' '**/.mise/' | grep -q .; then
+            echo "::error::.mise directory is tracked in git - remove it before pushing to main"
+            git ls-files -- '.mise/' '**/.mise/'
+            exit 1
+          fi
+
+      # Computes the version only. `fallback-version` is deliberately unset so a
+      # missing tag fails visibly instead of being papered over.
+      - name: Conventional Changelog Action
+        id: changelog
+        uses: TriPSs/conventional-changelog-action@v6
+        with:
+          # Do not generate the CHANGELOG.md. Changelog details will be included
+          # in the release notes.
+          output-file: 'false'
+          github-token: ${{ github.token }}
+          skip-commit: 'true'
+          skip-tag: 'true'
+          git-push: 'false'
+
+      # The bootstrap placeholder version is 0.0.1 and the first real release
+      # must be exactly 1.0.0. Runs before the version bump so an abort never
+      # leaves a wrong version committed on main as the base for the next
+      # computation.
+      - name: Ensure the first release is 1.0.0
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          COMPUTED_VERSION: ${{ steps.changelog.outputs.version }}
+        run: |
+          current_version=$(jq -r '.version' package.json)
+          if [ "$current_version" = '0.0.1' ] && [ "$COMPUTED_VERSION" != '1.0.0' ]; then
+            echo "::error::First release must be 1.0.0 but the computed version is $COMPUTED_VERSION"
+            exit 1
+          fi
+
+      - name: Update Package Versions
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          COMPUTED_VERSION: ${{ steps.changelog.outputs.version }}
+        run: yarn workspaces foreach --all version "$COMPUTED_VERSION" --deferred
+
+      - name: Apply Version Updates
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        run: yarn version apply --all
+
+      - name: Commit and Push Updates
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          # [skip ci] keeps the version bump from triggering another run.
+          commit_message: 'chore(release): v${{ steps.changelog.outputs.version }} [skip ci]'
+          skip_fetch: true
+          skip_checkout: true
+
+      # Published in dependency order. Both dependents pin protocol exactly, so
+      # publishing a dependent first would put a package on the registry
+      # referencing a protocol version nobody can install.
+      #
+      # Always `yarn npm publish`, never `npm publish`: only Yarn's packer
+      # rewrites the `workspace:` protocol to a concrete version.
+      - name: Publish firebase-kit-protocol Package
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        working-directory: packages/firebase-kit-protocol
+        run: yarn npm publish --access public --provenance
+
+      - name: Publish firebase-kit-client Package
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        working-directory: packages/firebase-kit-client
+        run: yarn npm publish --access public --provenance
+
+      - name: Publish firebase-kit-admin Package
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        working-directory: packages/firebase-kit-admin
+        run: yarn npm publish --access public --provenance
+
+      # Last, so the tag existing is evidence the whole release landed. The tag
+      # value comes from the changelog step so its format matches what the
+      # changelog tooling scans for on the next release.
+      - name: Create Release
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: false
+          name: ${{ steps.changelog.outputs.tag }}
+          tag: ${{ steps.changelog.outputs.tag }}
+          # The release notes are the only place changelog content lives, since
+          # no CHANGELOG.md is committed.
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+          token: ${{ github.token }}
