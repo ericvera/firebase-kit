@@ -204,3 +204,104 @@
   wiring applies; the substitute verification is the scratch-repository
   pathspec experiment, the guard-logic execution, and the `actionlint` run
   above.
+
+## 1.3 — Placeholder packages, root `firebase-tools`, and `MAINTAINERS.md` (committed on `main`, not this branch)
+
+- Work commit: `6f07c25` on `main`, subject `chore: add placeholder packages and
+  maintainer documentation`. Same deliberate exception as 1.1/1.2 — phase 1 is
+  authored on `main` because `.mise/` must never reach it, and a `chore:`
+  subject keeps the task 1.4 push from computing a version and attempting a
+  publish before OIDC is configured.
+- Key changes (all on `main`):
+  - `packages/firebase-kit-protocol/`, `packages/firebase-kit-client/`,
+    `packages/firebase-kit-admin/` — each **exactly** `package.json` +
+    `README.md`. Every manifest has the same six keys and nothing else: `name`,
+    `version` `0.0.1`, `description`, `license` `MIT`, `repository`
+    (`git+https://github.com/ericvera/firebase-kit.git` plus `directory:
+    packages/<name>`), and `publishConfig.access` `public`. No `dependencies` /
+    `devDependencies` / `peerDependencies` / `optionalDependencies`, no
+    `exports` / `files` / `main` / `types`, no `scripts`, no `private`, no
+    `engines`, no `type`, no `keywords`. The READMEs say the package is coming
+    soon, state that the release is a placeholder containing no code, and link
+    to the repository.
+  - `package.json` — added `firebase-tools: "15.23.0"` to root devDependencies.
+    Exact pin, matching what okven pins in both its root and its
+    `firebase-kit-admin`; task 2.4 must reuse this exact string.
+  - `yarn.lock` — the three workspaces plus the `firebase-tools` graph
+    (+552 resolved packages).
+  - `MAINTAINERS.md` (new) and `README.md` (now links to it and to the three
+    package directories).
+- `MAINTAINERS.md` structure: a top-level never-`npm publish` rule; **Bootstrap
+  (one time)** in 7 numbered steps — temporary token (classic Automation, or a
+  granular token scoped to *All packages*, since the three names do not exist
+  yet and so cannot be selected individually) → publish protocol → client →
+  admin with `yarn workspace <name> npm publish --access public`, the token
+  supplied through `YARN_NPM_AUTH_TOKEN` via a `printf` + `read -rs` prompt →
+  trusted publisher (`ericvera` / `firebase-kit` / `publish.yml` / environment
+  empty) → revoke the token → "Allow auto-merge" → branch protection that
+  permits the release workflow's own bump push → a confirmation checklist; then
+  a short **How a release works** reference; then **Recovering a partially
+  published release** — read the version from the `chore(release):` bump commit,
+  determine which packages published, then Route A (finish by hand, then tag and
+  `gh release create`) or Route B (abandon, tag anyway), both ending with a
+  `v$VERSION` tag on the bump commit, plus the facts that republishing is
+  impossible, that a version gap is acceptable, and that the `v0.0.1` seed tag
+  must never be deleted.
+
+### Deviations from plan
+
+- **The recovery section reads the attempted version from the `chore(release):`
+  bump commit, not from `package.json` and not from a tag**, matching the 1.2
+  review correction: the changelog action derives the previous version from git
+  tags, and the tag is created only after all three publishes, so a partial
+  failure leaves no tag at all. The task file predates that correction.
+- **Both recovery routes end by creating the `v$VERSION` tag on the bump
+  commit**, including the "abandon this version" route. The task file describes
+  Route B only as letting the next release move forward; the tag is the
+  mechanism that makes that true, since without it the next run recomputes
+  `$VERSION` from the older tag and fails again on the packages that already
+  published it. The `v0.0.1` seed tag is called out separately as never-delete.
+- One troubleshooting note was added that the task file does not mention: Yarn
+  publishes through `https://registry.yarnpkg.com` (npm's proxy, the same path
+  the workflow and the scdate template already use), with
+  `YARN_NPM_PUBLISH_REGISTRY=https://registry.npmjs.org` documented as the
+  fallback if a token is ever rejected there.
+- The placeholder manifests deliberately omit `engines`, even though REQ-PKG-6
+  will require `node >= 24` on the **real** packages. The task file enumerates
+  the placeholder's fields exhaustively and `0.0.1` is permanent, so nothing
+  beyond that list was added. Task 3.1 adds it.
+
+### Verification
+
+- `yarn install --immutable`, `yarn format`, `yarn lint`, `yarn build`,
+  `yarn test`, `yarn test:unit`, `yarn test:emulator` all exit 0 with the three
+  workspaces present. `yarn format` leaves every new file unchanged on a second
+  pass.
+- `yarn workspace <name> pack --dry-run` for all three lists exactly `README.md`
+  and `package.json` and nothing else. `yarn workspace firebase-kit-protocol npm
+  publish --dry-run --access public` reports the same two files.
+- Manifest keys asserted programmatically against a forbidden-key list
+  (`dependencies`, `devDependencies`, `peerDependencies`,
+  `optionalDependencies`, `peerDependenciesMeta`, `exports`, `files`, `main`,
+  `types`, `typings`, `scripts`, `bin`): zero hits on all three.
+- `yarn info firebase-tools --name-only --json` returns exactly one line,
+  `"firebase-tools@npm:15.23.0"`. Required: the composite action appends that
+  output straight to `$GITHUB_OUTPUT`, so a second line would corrupt the
+  emulator cache key.
+- `yarn workspaces list --json` reports 4 workspaces (root plus the three).
+- Lockfile churn audited rather than assumed: both the pre- and post-install
+  `yarn.lock` were parsed into descriptor → resolution maps (201 → 919
+  descriptors) and compared — **zero** changed resolutions and **zero** removed
+  descriptors. `@types/node@npm:^24.13.3` still resolves to `24.13.3`; the new
+  `26.2.0` entry belongs to firebase-tools' separate `>=13.7.0` descriptor.
+- `read -rs` (the token prompt in `MAINTAINERS.md`) was executed under both
+  `zsh` and `bash` to confirm portability — `read -p` is not portable, since
+  zsh's `-p` means read from the coprocess.
+- Cold read-through of `MAINTAINERS.md`: every command is copy-pasteable, all
+  five in-document anchor links resolve to real headings, and one self-reference
+  error (step 1 pointing at step 5 for token revocation instead of step 4) was
+  found and fixed.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies. The substitute verification is the dry-run pack inspection,
+  the manifest key assertion, and the cold read-through above; the publish path
+  itself is exercised by the maintainer at the task 1.4 hard stop.
