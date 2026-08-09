@@ -389,3 +389,99 @@
 - End-to-end tests: none — the project's test exception for consumer-facing
   wiring applies; the substitute verification is the documentation cross-check
   above plus a re-read of steps 1 through 4 as a continuous procedure.
+
+## 1.4 — Public repository created, `main` and the `v0.0.1` seed tag pushed, pipeline rehearsed green, hard stop
+
+- No repository files changed. This task created remote state and pushed
+  existing commits; the only tracked change is this progress entry, on the
+  feature branch.
+- **Repository**: <https://github.com/ericvera/firebase-kit> — public, owner
+  `ericvera`, description set, topics `firebase` / `firestore` / `typescript` /
+  `monorepo`. No branch protection and no rulesets were created, so the release
+  workflow's own bump push is unobstructed (bootstrap step 6 is the maintainer's
+  decision).
+- **Seed tag**: `v0.0.1` created by hand on `c4e916b` (the phase-1 HEAD at push
+  time) and pushed **before** the branch, so the first workflow run already saw
+  it. Verified on the remote with `git ls-remote --tags origin` →
+  `c4e916b… refs/tags/v0.0.1`, and it is the only tag on the remote.
+- **Pushed subject**: `chore: document granular npm token flow in
+  MAINTAINERS.md`. All six commits reaching `main` are `chore:` or `mise:`, so
+  the changelog step reported a skip as designed.
+- **Rehearsal run**: `Package publishing` run
+  [31298024182](https://github.com/ericvera/firebase-kit/actions/runs/31298024182)
+  — **green in 26s**. Checkout, Node 24, `yarn install --immutable`, `yarn
+  build`, `yarn lint`, Setup Firebase Tools, `yarn test`, and the `.mise/` guard
+  all passed; the changelog step logged `Generated changelog is empty and
+  skip-on-empty has been activated so we skip this step`; every one of the eight
+  steps gated on `skipped == 'false'` (1.0.0 guard, both version steps, the bump
+  commit, all three publishes, the release) shows as skipped.
+- The changelog log line `## [0.0.2](…/compare/v0.0.1...v0.0.2)` is direct
+  evidence the seed tag is being read as the previous version — the 1.2 review
+  fix's whole premise. Nothing was published, no tag was created by the run, and
+  no GitHub release exists.
+- **Emulator setup works.** `Setup Firebase Tools` passed: `yarn info
+  firebase-tools --name-only --json` emitted the single line
+  `"firebase-tools@npm:15.23.0"` and the cache key resolved to
+  `firebase-emulators-Linux-"firebase-tools@npm:15.23.0"` (cache miss, as
+  expected on a first run). The 1.2 known-issue note is now closed out.
+- **Registry state**: `firebase-kit-protocol`, `firebase-kit-client`, and
+  `firebase-kit-admin` all return HTTP 404 from
+  `https://registry.npmjs.org/<name>`. Nothing was published. No `yarn npm
+  publish` was run anywhere.
+- Feature branch rebased onto the new `main` (30 commits replayed, no
+  conflicts). `main` is an ancestor of the branch, the branch tracks 19 `.mise/`
+  files, and `main` tracks zero.
+- Work stopped here. Task 2.1 must not start until the maintainer confirms all
+  three placeholders are published and all three trusted publishers are
+  configured.
+
+### Deviations from plan
+
+- **`main` is no longer at the commit that was pushed.** Creating the repository
+  activated `.github/dependabot.yml` immediately: dependabot opened three PRs
+  within two minutes, and PR #1 (`firebase-tools` 15.23.0 → 15.26.0, a
+  non-major in the `dev-non-major` group) passed the auto-merge workflow's gates
+  and merged, moving `main` to `d42fa5a`. This is the configured behaviour, not
+  a defect — but two consequences matter downstream:
+  - **The root `firebase-tools` pin is now `15.26.0`, not `15.23.0`.** The 1.3
+    entry above tells task 2.4 to reuse the exact string `15.23.0` when pinning
+    `firebase-tools` in `firebase-kit-admin`. **Read the current root
+    `package.json` instead** and match whatever it says at that time; dependabot
+    will keep moving it.
+  - The merge did **not** trigger `publish.yml`. Merges performed by the
+    auto-merge workflow authenticate with `GITHUB_TOKEN`, and GitHub does not
+    raise workflow-triggering events for pushes made with that token. Harmless
+    here (the merge carries no release-worthy commit) and irrelevant to real
+    releases, which are pushed by a human, but worth knowing before anyone
+    debugs a "missing" run.
+- **`MAINTAINERS.md` bootstrap step 5 overstates the auto-merge prerequisite.**
+  It says that without "Allow auto-merge" the auto-merge step *fails*. The
+  repository reports `allow_auto_merge: false` and the step still succeeded and
+  the PR still merged, because with no required status checks GitHub merges
+  immediately rather than queueing. The step's advice is still correct once
+  `main` is protected; it was left unedited because this task changes no files
+  and the maintainer should enable the setting regardless.
+- Two dependabot PRs are open and are **majors**, correctly excluded from
+  auto-merge by the all-ecosystem major rule:
+  - **#2 `typescript` 6.0.3 → 7.0.2 — check is red**, and legitimately so:
+    `yarn lint` aborts with `typescript-eslint does not support TS 7.0`
+    (typescript-eslint issue #10940 tracks support for TS >= 7.1). The gate did
+    its job. Do not merge; close it or add a dependabot ignore until
+    typescript-eslint supports TS 7.
+  - **#3 `@types/node` 24.13.3 → 26.1.2 — check is green.** Maintainer's call.
+
+### Verification
+
+- Every checklist item confirmed against the remote rather than locally:
+  repository visibility via `gh repo view --json visibility` → `PUBLIC`; tag via
+  `git ls-remote --tags origin`; releases via `gh release list` → empty;
+  registry via three `curl -o /dev/null -w %{http_code}` calls → `404` each.
+- Run outcome read from `gh run view --log`, not from the summary UI, so the
+  skip reason and the per-step conclusions are quoted from the log itself.
+- Post-rebase quality gate on the feature branch: `yarn install --immutable`,
+  `yarn format`, `yarn lint`, `yarn build`, `yarn test:unit` all exit 0 against
+  the dependabot-updated lockfile, with a clean working tree afterwards.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies. The substitute verification is the live green workflow run
+  plus the registry, tag, and release checks above, exactly as the task file
+  specifies.
