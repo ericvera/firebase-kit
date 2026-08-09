@@ -40,16 +40,39 @@ Before starting, confirm:
 
 ### 1. Create a temporary npm token
 
-On npmjs.com → your avatar → **Access Tokens** → **Generate New Token**:
+Granular access tokens are the only kind npm still issues. Classic tokens are
+gone: npm disabled their creation on 2025-11-05 and revoked every remaining one
+on 2025-12-09, so there is no token-type choice on the page any more.
 
-- A **Classic → Automation** token is the simplest choice: it can create new
-  packages and it does not prompt for a one-time password.
-- A **Granular Access Token** also works, but it must be scoped to **All
-  packages** with **Read and write** permission. The three packages do not exist
-  yet, so they cannot be selected individually.
+On npmjs.com → your avatar → **Access Tokens** → **Generate New Token**, fill in:
 
-This token is temporary — step 4 revokes it. The repository itself never stores
-an npm token; the pipeline authenticates through OIDC trusted publishing.
+| Field                                 | Value                                   |
+| ------------------------------------- | --------------------------------------- |
+| Token name                            | anything, e.g. `firebase-kit-bootstrap` |
+| Bypass two-factor authentication      | **checked**                             |
+| Packages and scopes → Permissions     | **Read and write**                      |
+| Packages and scopes → Select Packages | **All Packages**                        |
+| Organizations → Permissions           | **No access**                           |
+| Expiration                            | the shortest period offered             |
+
+Three of those are not obvious:
+
+- **"Bypass two-factor authentication" must be checked.** It is unchecked by
+  default, and an unchecked write token stops the publish in step 2 on a
+  one-time-password prompt. This box is what makes a non-interactive publish
+  possible at all.
+- **"All Packages" is required here**, even though it is broader than this task
+  needs. "Only select packages and scopes" can only list packages that already
+  exist and scopes you already own; all three names are unscoped and
+  unpublished, so there is nothing to select, and a token limited that way
+  cannot create them.
+- **Expiration is capped at 90 days** for any token with write access — there is
+  no "no expiration" option. That is irrelevant here: this token performs three
+  publishes and is revoked in step 4, minutes later.
+
+Leave every other field alone. This token is temporary — step 4 revokes it. The
+repository itself never stores an npm token; the pipeline authenticates through
+OIDC trusted publishing.
 
 ### 2. Publish the three placeholders
 
@@ -91,8 +114,9 @@ Notes:
 
 - Do **not** pass `--provenance` here. Provenance requires a CI identity; the
   release workflow attaches it, a laptop cannot.
-- If npm asks for a one-time password (a non-automation token with 2FA), append
-  `--otp <code>` to each command.
+- If the registry still asks for a one-time password — the token was created
+  without **Bypass two-factor authentication** — append `--otp <code>` to each
+  command rather than starting over with a new token.
 - Yarn publishes through `https://registry.yarnpkg.com`, npm's proxy, which is
   also what the release workflow uses. In the unlikely event that the token is
   rejected there, prefix the command with
