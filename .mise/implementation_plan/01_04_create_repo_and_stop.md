@@ -113,7 +113,8 @@ this task is the live workflow run itself:
   the publish steps bypassed.
 - Confirm on npmjs.com that none of the three names exists yet — the run must not
   have published anything.
-- Confirm no tag and no GitHub release were created.
+- Confirm the run created no tag and no GitHub release of its own. The `v0.0.1`
+  seed tag is the one exception and must still be there.
 
 ## Gotchas
 
@@ -140,7 +141,9 @@ this task is the live workflow run itself:
       it is visible on the remote, not just locally
 - [ ] The workflow run on the push is **green**
 - [ ] The run log shows the changelog step skipping and all publish steps bypassed
-- [ ] No package exists on npmjs.com; no tag and no GitHub release were created
+- [ ] No package exists on npmjs.com, and the **workflow run** created no tag and
+      no GitHub release. The `v0.0.1` seed tag from step 4 is expected and must
+      remain — it is created by hand, not by the run.
 - [ ] The mise feature branch is rebased onto the new `main` and still carries
       `.mise/`
 - [ ] The maintainer has been given the repository URL, the run link, and the

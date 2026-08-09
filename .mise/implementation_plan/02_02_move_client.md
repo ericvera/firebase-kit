@@ -9,7 +9,7 @@ the root commands, and bring it to a clean lint under the stricter configuration
 ## Requirements addressed
 
 REQ-REPO-1, REQ-REPO-4, REQ-QUAL-3a, REQ-QUAL-3e, REQ-QUAL-4, REQ-QUAL-4a,
-REQ-TEST-1, REQ-TEST-2, REQ-TEST-6
+REQ-TEST-1, REQ-TEST-2, REQ-TEST-6, REQ-PKG-6
 
 ## Background
 
@@ -90,14 +90,14 @@ package where that lands at scale.**
    declares one unnamed project.
 
    If the root orchestration selects by exact project name, this package matches
-   nothing and its entire suite is skipped silently. Note that project names must
-   be unique within a config, so this package cannot simply reuse the name
-   `firebase-kit-admin` uses.
+   nothing and its entire suite is skipped silently.
 
-   Resolve it one of two ways, consistent with the per-package invocation task
-   2.1 established:
-   - give this package a distinctly named project and select by pattern, or
-   - do not select by name for this package at all.
+   Because task 2.1 established **one runner invocation per package**, each
+   package's config is loaded in its own run, and project-name uniqueness is
+   scoped to a single config. This package may therefore give its project the
+   same name `firebase-kit-admin` uses for its unit group — there is no collision
+   — which makes a uniform name-based selection across both packages the simplest
+   correct design.
 
    `firebase-kit-admin` must keep a name-based split regardless, because its unit
    and emulator groups have to be runnable independently.
@@ -191,6 +191,8 @@ library packages with no e2e infrastructure, there is no browser-level testing.
 - [ ] `tsconfig.json` sets `removeComments: false` and references protocol
 - [ ] `package.json` declares `firebase-kit-protocol` as `workspace:*`
 - [ ] All 7 `exports` entries carried over unchanged
+- [ ] `package.json` declares `type: module`, `engines.node >= 24`, and
+      `sideEffects: false`
 - [ ] `yarn test:unit` reports 29 files / 149 passing cases for this package
 - [ ] `yarn test:emulator` runs nothing for this package
 - [ ] No test was deleted, skipped, or weakened

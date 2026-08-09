@@ -178,12 +178,15 @@ and deviates in five specific places, each called out below.
     one PR per package.
 
 15. **`.github/workflows/dependabot.yml`.** Copy scdate's auto-merge workflow,
-    with two deviations. First, **exclude all major updates from auto-merge, for
+    with three deviations. First, **exclude all major updates from auto-merge, for
     every ecosystem** — scdate excludes only github-actions majors (fourth
     deliberate deviation). Second, use the same build → lint → test order as
     `publish.yml`, and include the emulator setup action from step 1, since
     `yarn test` will run the emulator suite after task 2.3 and would otherwise
-    fail for lack of a Java runtime (fifth deliberate deviation).
+    fail for lack of a Java runtime (fifth deliberate deviation). Third, install
+    with the **immutable-lockfile flag passed explicitly**, exactly as in step 5 —
+    this workflow is CI too, and a dependency-update run that silently rewrites
+    the lockfile defeats the point of checking it.
 
 ## Testing suggestions
 
@@ -224,9 +227,12 @@ cannot be exercised by the repository's own tests. Substitute verification:
 - [ ] `concurrency` sets `cancel-in-progress: false`
 - [ ] Permissions are exactly `contents: write` and `id-token: write`; no npm
       token is referenced anywhere in the repository
-- [ ] Install passes the immutable-lockfile flag explicitly
-- [ ] Step order is: install → build → lint → test → `.mise/` guard → changelog →
-      `1.0.0` guard → version bump → commit → publish ×3 → tag/release
+- [ ] **Both** workflows pass the immutable-lockfile flag explicitly
+- [ ] Step order in `publish.yml` is: install → build → lint → emulator setup →
+      test → `.mise/` guard → changelog → `1.0.0` guard → version bump → commit →
+      publish ×3 → tag/release
+- [ ] The emulator setup action is referenced before the test step in **both**
+      workflows
 - [ ] The three publish steps run protocol, then client, then admin, each with
       `yarn npm publish --access public` and provenance enabled
 - [ ] Every step after the changelog step is conditional on it not having skipped

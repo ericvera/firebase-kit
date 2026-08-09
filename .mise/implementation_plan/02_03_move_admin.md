@@ -9,7 +9,7 @@ in CI, and bring it to a clean lint under the stricter configuration.
 ## Requirements addressed
 
 REQ-REPO-1, REQ-REPO-4, REQ-QUAL-3a, REQ-QUAL-3b, REQ-TEST-1, REQ-TEST-2,
-REQ-TEST-3, REQ-TEST-4, REQ-TEST-5, REQ-TEST-6
+REQ-TEST-3, REQ-TEST-4, REQ-TEST-5, REQ-TEST-6, REQ-PKG-6
 
 ## Background
 
@@ -207,6 +207,8 @@ testing; the emulator suite is the integration-level coverage.
 - [ ] `package.json` declares `firebase-kit-protocol` as `workspace:*`
 - [ ] All 10 `exports` entries carried over; `./mocks` is present and not excluded
       from the published files
+- [ ] `package.json` declares `type: module`, `engines.node >= 24`, and
+      `sideEffects: false`
 - [ ] The emulator command preserves the project id, the auth/firestore
       restriction, `TZ=Etc/Universal`, the build prefix, and the correct working
       directory

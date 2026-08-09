@@ -9,7 +9,7 @@ the two remaining packages will plug into.
 ## Requirements addressed
 
 REQ-REPO-1, REQ-REPO-3, REQ-QUAL-1, REQ-QUAL-2, REQ-QUAL-3, REQ-QUAL-3c,
-REQ-QUAL-3d, REQ-QUAL-3f, REQ-QUAL-5, REQ-QUAL-5a, REQ-QUAL-6b
+REQ-QUAL-3d, REQ-QUAL-3f, REQ-QUAL-5, REQ-QUAL-5a, REQ-QUAL-6b, REQ-PKG-6
 
 ## Background
 
@@ -36,7 +36,12 @@ What phase 1 left in place that this task changes:
 - `packages/firebase-kit-protocol/` holds only a placeholder `package.json` and
   README.
 - Root `tsconfig.json` is solution-style with an **empty** `references` array.
+- **Root `build` is a stub that exits 0** — phase 1 could not run a real compile,
+  because a solution config with an empty `files` list and no references fails
+  with `TS18002`. This task restores it.
 - Root `test`, `test:unit`, and `test:emulator` are stubs that echo and exit 0.
+
+All four stubs are replaced here. None may survive this task.
 
 ## Files to modify/create
 
@@ -45,7 +50,8 @@ What phase 1 left in place that this task changes:
 - `packages/firebase-kit-protocol/package.json` — real manifest replacing the
   placeholder
 - `tsconfig.json` — add the first project reference
-- `package.json` — replace the stub test scripts with real orchestration
+- `package.json` — replace the stub `build` **and** the stub test scripts with
+  their real implementations
 
 ## Implementation details
 
@@ -74,10 +80,17 @@ What phase 1 left in place that this task changes:
    Task 3.1 adds description, keywords, and `repository.directory`; task 2.4
    audits dependencies. Do not pre-empt either.
 
-4. **Add the project reference.** Add `./packages/firebase-kit-protocol` to the
-   root `tsconfig.json` `references` array. This is what makes `yarn build`
-   compile it, and what lets the typed lint rules resolve its types from the
-   other packages later.
+4. **Add the project reference, then restore the real root `build`.** Add
+   `./packages/firebase-kit-protocol` to the root `tsconfig.json` `references`
+   array — a non-empty `references` is what clears the `TS18002` that forced the
+   phase-1 stub — and then replace the stub `build` script with the real project
+   build (`tsc --build`).
+
+   Do not skip this because the tests pass without it. A stub `build` exits 0, so
+   every later task's "`yarn build` passes" check would succeed vacuously and
+   **nothing would ever type-check the three packages** under the strict
+   configuration. Confirm the restored command actually emits output before
+   moving on.
 
 5. **Replace the stub test scripts with real per-package orchestration.** This is
    the structurally important part of the task.
@@ -134,8 +147,12 @@ library packages with no e2e infrastructure, verify structurally instead:
   nothing in the build or tests catches it — only reading a `.d.ts` does.
 - **Do not give protocol a stub `test` script.** An echoing stub makes it look
   covered and defeats the structural exclusion in step 5.
+- **A stub `build` that survives this task makes every later build check
+  meaningless.** It exits 0 and nothing type-checks. This is the single most
+  consequential thing to get right here.
 - **The root `references` array is order-insensitive but existence-sensitive.** A
-  reference to a directory without a `tsconfig.json` fails the build with TS6053.
+  reference to a directory without a `tsconfig.json` fails with `TS5083`
+  (cannot read file), not a quiet no-op.
 - **`workspace:` dependencies are not involved yet.** Protocol depends on nothing.
   Tasks 2.2 and 2.3 add the dependency edges pointing at it.
 - **A workspace-spanning single test run is the natural thing to write and is
@@ -149,8 +166,14 @@ library packages with no e2e infrastructure, verify structurally instead:
 - [ ] `packages/firebase-kit-protocol/src/` matches the Okven source byte for byte
 - [ ] The Okven repository is unmodified
 - [ ] `removeComments` is `false`; a generated `.d.ts` visibly retains doc comments
-- [ ] Root `tsconfig.json` references the package; `yarn build` emits `dist/`
+- [ ] Root `tsconfig.json` references the package
+- [ ] Root `build` is the **real** project build, not the phase-1 stub, and
+      `yarn build` emits `dist/`
+- [ ] No phase-1 stub script (`build`, `test`, `test:unit`, `test:emulator`)
+      survives this task
 - [ ] The package has `build` and `lint` scripts and **no** `test` script
+- [ ] `package.json` declares `type: module`, `engines.node >= 24`, and
+      `sideEffects: false`
 - [ ] Root test commands invoke the runner once per package, not once globally
 - [ ] No repository-wide "pass with no tests" setting remains anywhere
 - [ ] Test commands build before running
