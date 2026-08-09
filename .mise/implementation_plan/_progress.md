@@ -47,3 +47,85 @@
 - End-to-end tests: none. The project's test exception for library packages with
   no e2e infrastructure applies; the clean-clone quality run above is the
   substitute verification.
+
+## 1.2 — Release workflow, dependency automation, and guards (committed on `main`, not this branch)
+
+- Work commit: `aea5525` on `main`. Same deliberate exception as 1.1: the work
+  lives on `main` because the `.mise/` guard this task adds would fail any run
+  where `.mise/` reaches `main`.
+- Key changes (all new, all on `main`):
+  - `.github/workflows/publish.yml` — push-to-`main`-only trigger, no manual
+    dispatch; `concurrency` group `${{ github.ref }}` with
+    `cancel-in-progress: false`; permissions exactly `contents: write` +
+    `id-token: write`; checkout `fetch-depth: 0`; Node 24 with
+    `registry-url: https://registry.npmjs.org`. Step order: `yarn install
+    --immutable` → `yarn build` → `yarn lint` → `./.github/actions/setup-firebase-tools`
+    → `yarn test` → `.mise/` guard → `TriPSs/conventional-changelog-action@v6`
+    (id `changelog`) → `1.0.0` guard → `yarn workspaces foreach --all version …
+    --deferred` → `yarn version apply --all` →
+    `stefanzweifel/git-auto-commit-action@v7` (`chore(release): v<version>
+    [skip ci]`) → publish protocol/client/admin → `ncipollo/release-action@v1`.
+  - `.github/actions/setup-firebase-tools/action.yml` — ported verbatim from
+    `/Users/eric/Code/okven`: Java 21 temurin, `yarn info firebase-tools
+    --name-only --json` into a step output, `actions/cache@v5` on
+    `~/.cache/firebase/emulators`.
+  - `.github/dependabot.yml` — scdate's config copied verbatim (weekly npm at
+    `/` and github-actions at `/`, groups `dev-non-major`, `prod-non-major`,
+    `actions-non-major`).
+  - `.github/workflows/dependabot.yml` — auto-merge with the three specified
+    deviations: majors excluded for **all** ecosystems
+    (`startsWith(update-type, 'version-update:semver') && update-type !=
+    'version-update:semver-major'`), build → lint → emulator setup → test
+    order, and `yarn install --immutable`.
+- The five deviations from the scdate template are all in place:
+  `cancel-in-progress: false`, explicit `--immutable` in both workflows,
+  `--provenance` on all three publish steps, all-ecosystem major exclusion in
+  dependabot auto-merge, and the emulator setup action in the dependabot
+  workflow. scdate's `npm install -g npm@…` step was intentionally not carried
+  over, and scdate's dependabot lint-before-build ordering was not copied.
+- Guard implementations: the `.mise/` guard is unconditional (so it fails a
+  non-releasing push too) and runs `git ls-files -- '.mise/' '**/.mise/'`,
+  emitting `::error::` and exiting 1. The `1.0.0` guard is gated on
+  `steps.changelog.outputs.skipped == 'false'` and only aborts when
+  `jq -r '.version' package.json` is `0.0.1` **and** the computed version is not
+  `1.0.0`.
+- `fallback-version` is not set. No `CHANGELOG.md` is produced
+  (`output-file: 'false'`); the release body is
+  `steps.changelog.outputs.clean_changelog`.
+
+### Deviations from plan
+
+- None functionally. Two implementation choices worth recording: the computed
+  version is passed to `run:` steps through a `COMPUTED_VERSION` env var rather
+  than interpolated directly into the shell (avoids expression-into-shell
+  injection; behaviour is identical), and the `1.0.0` guard reads the current
+  version with `jq` rather than `node -p` (the root `package.json` sets
+  `"type": "module"`, which makes `node -p "require(...)"` ambiguous).
+
+### Verification
+
+- `actionlint` 1.7.12 (installed via Homebrew for this task; it was not present
+  before) reports 0 errors across both workflow files, with its integrated
+  shellcheck active. It does not lint composite action files, so
+  `action.yml` and `.github/dependabot.yml` were additionally parsed as YAML —
+  all four files parse clean.
+- `yarn format` leaves all four files unchanged; `yarn lint`, `yarn build`,
+  `yarn test`, `yarn test:unit` all exit 0.
+- No npm token anywhere: `grep -rniE 'npm_token|NODE_AUTH_TOKEN|secrets\.NPM'`
+  over the repo returns nothing. No `continue-on-error` and no `always()` in
+  `.github/`.
+- Four-scenario conditional trace: (a) push with no release-worthy commits —
+  gates run, `.mise/` guard passes, changelog sets `skipped == 'true'`, every
+  later step is skipped, run green with nothing published or tagged (this is the
+  task 1.4 phase-1 push); (b) push carrying `.mise/` — guard exits 1 after the
+  gates, changelog and everything after never run; (c) first real release
+  computing `1.0.0` — `0.0.1` matches but `1.0.0 != 1.0.0` is false, so the
+  guard passes and the full bump/publish/tag sequence runs; (d) first real
+  release computing anything else — guard exits 1 before the bump, so no wrong
+  version is committed to `main`.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies. The substitute verification is the `actionlint` run plus the
+  four-scenario trace above; the workflow's first real execution is task 1.4.
+- Known and expected: the emulator setup step will fail until task 1.3 adds the
+  root `firebase-tools` devDependency, since `yarn info firebase-tools` errors
+  when nothing declares it. This ordering is called out in the task's Gotchas.
