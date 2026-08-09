@@ -1,0 +1,14 @@
+{
+  "name": "firebase-kit-client",
+  "version": "0.0.1",
+  "description": "Client-side Firebase toolkit for callable functions, Firestore, connectivity, and rate limiting.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ericvera/firebase-kit.git",
+    "directory": "packages/firebase-kit-client"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

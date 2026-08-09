@@ -1,0 +1,14 @@
+{
+  "name": "firebase-kit-protocol",
+  "version": "0.0.1",
+  "description": "Shared protocol types and constants for the firebase-kit client and admin packages.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ericvera/firebase-kit.git",
+    "directory": "packages/firebase-kit-protocol"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
