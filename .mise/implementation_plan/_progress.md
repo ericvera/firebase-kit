@@ -749,3 +749,80 @@ Non-mechanical fixes worth recording:
 - End-to-end tests: none — the project's test exception for library packages with
   no e2e infrastructure applies. The substitute verification is the 29-file /
   149-case reconciliation and the three automock activation experiments above.
+
+## 2.2 (review fix) — Public surface restored to Okven's, pre-commit hook fixed for a fresh clone
+
+Three lint-driven changes from 2.2 had altered the published type surface, which
+the approved requirements put out of scope, plus one pre-commit gap raised in the
+same review.
+
+- Key changes (on `feat/publish-firebase-kit-packages`):
+  - `src/callable/types.ts` — `ActionableFunctionCallerOptions` takes
+    `TRateLimitCategory` **first** again, with `TCommand extends string = string`
+    added as an optional **second** parameter. `TCommand` now has two uses in the
+    interface, which is what `no-unnecessary-type-parameters` wanted, while
+    `ActionableFunctionCallerOptions<MyCategory>` keeps compiling and, at the
+    default `TCommand = string`, `rateLimitMap` emits exactly Okven's
+    `Partial<Record<string, TRateLimitCategory>>`. `RequestResponseMap` is back to
+    Okven's unparameterised `Record<string, [object | undefined, unknown]>` with
+    its original doc comment, its type parameter having become unused.
+  - `src/callable/createActionableFunctionCaller.ts` — `TMap extends
+    RequestResponseMap` restored (it had been narrowed to
+    `RequestResponseMap<TCommand>`, which rejected a map that does not cover
+    every member of the command union); the options argument is now
+    `ActionableFunctionCallerOptions<TRateLimitCategory, TCommand>`.
+  - `src/callable/createActionableFunctionCaller.test.ts` — the type-argument
+    edit 2.2 was forced into is reverted: `createCall` again takes
+    `ActionableFunctionCallerOptions<TestCategory>`. `TestMap` stays an
+    `interface` (`consistent-type-definitions`) but now extends
+    `RequestResponseMap`, which is how an interface satisfies the restored
+    `Record<string, …>` constraint. No case, assertion or snapshot changed.
+  - `src/testing/createGetSetDelMock.ts` — `failEntriesWith` takes `unknown`
+    again, matching Okven, and the armed fault is stored at `unknown`. The
+    rejection site normalises: an `Error` is rejected as-is, anything else is
+    carried as the `cause` of one, which is what `prefer-promise-reject-errors`
+    requires. No suppression and no type assertion.
+  - `package.json` — new root script `lint-changed` (`yarn build && eslint
+    --cache`), and `lint-staged` runs it instead of bare `eslint --cache`. Typed
+    linting resolves `firebase-kit-protocol` through package `exports` into
+    `dist/`, so on a fresh clone the pre-commit hook used to fail on
+    `RateLimitError.ts` before anything had been built.
+
+### Deviations from plan
+
+- `failEntriesWith` cannot be made byte-identical to Okven in behaviour as well
+  as in signature: rejecting a raw `unknown` is exactly what
+  `prefer-promise-reject-errors` forbids, and the rule cannot be satisfied
+  without either a suppression, an assertion, or normalising the value. The
+  signature and every in-repo call (all of which pass an `Error`) are unaffected;
+  only a caller arming the fault with a non-`Error` would now see that value as
+  `error.cause` rather than as the rejection reason itself.
+- One optional type parameter (`TCommand`) remains added to
+  `ActionableFunctionCallerOptions`. It is additive and defaulted, so every
+  existing instantiation is unchanged.
+
+### Verification
+
+- **Whole emitted `.d.ts` surface diffed against the Okven original.** Both trees
+  built from the same tsconfig, same TypeScript and same `node_modules`, 80
+  declaration files each. `diff -r` reports **two files, three hunks**, all of
+  them the additive optional parameter above:
+  `ActionableFunctionCallerOptions<TRateLimitCategory extends string, TCommand
+  extends string = string>`, its `rateLimitMap` written in terms of `TCommand`,
+  and the `options?` type argument on `createActionableFunctionCaller`. The other
+  78 files, including `RequestResponseMap` and `failEntriesWith`, are identical.
+- **Consumer compile against the built package**, importing
+  `firebase-kit-client/callable` and `firebase-kit-client/testing` through their
+  published entry points: `ActionableFunctionCallerOptions<Category>` with one
+  type argument, a `TMap` covering `'a' | 'b'` against `TCommand = 'a' | 'b' |
+  'c'`, and `failEntriesWith('not an error')` all type-check; the harness was
+  proved sensitive by a deliberate error.
+- `yarn format`, `yarn lint` (exit 0, no rule disabled, no `eslint-disable`, no
+  new assertion), `yarn build`, `yarn test` all pass; the suite is still
+  **29 test files / 149 passing cases**, with no case skipped or weakened.
+- **Fresh-clone pre-commit reproduced and fixed.** With every `dist/` and
+  `.tsbuildinfo` deleted, bare `eslint --cache` fails with the three
+  `no-unsafe-*` errors on `rate-limit/RateLimitError.ts(.test.ts)`;
+  `yarn lint-changed` on the same files exits 0. This commit was made with
+  `dist/` deleted, so the hook itself ran the build path.
+- `/Users/eric/Code/okven` unmodified (`git status` clean there).

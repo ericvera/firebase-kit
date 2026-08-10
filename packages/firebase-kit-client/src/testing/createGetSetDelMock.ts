@@ -25,7 +25,7 @@ export const createGetSetDelMock = (actual: typeof import('getsetdel')) => {
   // consumer uses it.
   const { queryInventory: _queryInventory, ...rest } = actual
 
-  let entriesError: Error | undefined = undefined
+  let entriesError: unknown = undefined
   let stubbed = false
 
   return {
@@ -36,7 +36,14 @@ export const createGetSetDelMock = (actual: typeof import('getsetdel')) => {
 
     entries: (...args: Parameters<typeof actual.entries>) => {
       if (entriesError !== undefined) {
-        return Promise.reject(entriesError)
+        // The armed fault is whatever the suite handed over; anything that is
+        // not already an Error is carried as the cause of one, because a
+        // rejection reason has to be an Error.
+        return Promise.reject(
+          entriesError instanceof Error
+            ? entriesError
+            : new Error('getsetdel entries fault', { cause: entriesError }),
+        )
       }
 
       return stubbed ? Promise.resolve([]) : actual.entries(...args)
@@ -49,7 +56,7 @@ export const createGetSetDelMock = (actual: typeof import('getsetdel')) => {
       stubbed ? Promise.resolve() : actual.delMany(...args),
 
     /** Makes every cache read reject, leaving the rest of the store real. */
-    failEntriesWith: (error: Error) => {
+    failEntriesWith: (error: unknown) => {
       entriesError = error
     },
 

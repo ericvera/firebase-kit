@@ -7,11 +7,15 @@ import { createActionableFunctionCaller } from './createActionableFunctionCaller
 import type {
   ActionableFunctionCallerDependencies,
   ActionableFunctionCallerOptions,
+  RequestResponseMap,
 } from './types.js'
 
 type TestCommand = 'get-entry' | 'update-order'
 
-interface TestMap {
+// Extends the map type rather than restating its shape: the rule against a
+// type alias here wants an interface, and an interface only satisfies the
+// caller's `TMap` constraint when it inherits the index signature.
+interface TestMap extends RequestResponseMap {
   'get-entry': [
     { entryId: string; note?: string | undefined },
     { updated: unknown },
@@ -98,7 +102,7 @@ const hostFunctions: Functions = {
 
 const createCall = (
   name: string,
-  options?: ActionableFunctionCallerOptions<TestCommand, TestCategory>,
+  options?: ActionableFunctionCallerOptions<TestCategory>,
 ) =>
   createActionableFunctionCaller<TestCommand, TestMap, TestCategory>(
     createDependencies(),

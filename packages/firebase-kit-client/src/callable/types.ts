@@ -4,19 +4,13 @@ import type { Functions } from 'firebase/functions'
 /**
  * Map of callable actions to their `[request, response]` pair. Each app
  * supplies its own; the client only needs the two positions.
- *
- * Naming the command union keys the map to it, the same way the protocol's
- * `CallableMap` does, so a group's map has to cover every command it declares.
  */
-export type RequestResponseMap<TCommand extends string = string> = Record<
-  TCommand,
-  [object | undefined, unknown]
->
+export type RequestResponseMap = Record<string, [object | undefined, unknown]>
 
 /** Per-callable-group overrides on top of the group's defaults. */
 export interface ActionableFunctionCallerOptions<
-  TCommand extends string,
   TRateLimitCategory extends string,
+  TCommand extends string = string,
 > {
   /** Callable timeout in milliseconds. Omitted leaves the SDK default. */
   timeoutMs?: number

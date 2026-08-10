@@ -27,13 +27,13 @@ import type {
 export const createActionableFunctionCaller =
   <
     TCommand extends string,
-    TMap extends RequestResponseMap<TCommand>,
+    TMap extends RequestResponseMap,
     TRateLimitCategory extends string,
   >(
     dependencies: ActionableFunctionCallerDependencies<TRateLimitCategory>,
     name: string,
     defaultCategory: TRateLimitCategory,
-    options: ActionableFunctionCallerOptions<TCommand, TRateLimitCategory> = {},
+    options: ActionableFunctionCallerOptions<TRateLimitCategory, TCommand> = {},
   ) =>
   async <A extends TCommand & keyof TMap>(
     action: A,
