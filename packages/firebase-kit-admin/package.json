@@ -3,6 +3,69 @@
   "version": "0.0.1",
   "description": "Firebase Admin SDK toolkit for callable functions, Firestore, auth, tasks, and validation.",
   "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./auth": "./dist/auth/index.js",
+    "./callable": "./dist/callable/index.js",
+    "./errors": "./dist/errors/index.js",
+    "./firestore": "./dist/firestore/index.js",
+    "./mocks": "./dist/mocks/index.js",
+    "./runtime": "./dist/runtime/index.js",
+    "./tasks": "./dist/tasks/index.js",
+    "./testing": "./dist/testing/index.js",
+    "./validation": "./dist/validation/index.js"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "!/**/__test__",
+    "!/**/__mocks__",
+    "!*.test.*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "lint": "eslint .",
+    "test": "yarn test-unit && yarn test-emulator",
+    "test-unit": "tsc --build && vitest run --project=unit",
+    "test-emulator": "tsc --build && firebase emulators:exec --project demo-admin-tests --only auth,firestore \"TZ=Etc/Universal vitest run --project=emulator\""
+  },
+  "dependencies": {
+    "firebase-kit-protocol": "workspace:*"
+  },
+  "peerDependencies": {
+    "betterbe": "^4.1.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5",
+    "firestore-snapshot-utils": "^3.0.1",
+    "vitest": "^4.1.10"
+  },
+  "peerDependenciesMeta": {
+    "betterbe": {
+      "optional": true
+    },
+    "firestore-snapshot-utils": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tsconfig/strictest": "^2.0.8",
+    "betterbe": "^4.1.0",
+    "eslint": "^10.8.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5",
+    "firebase-tools": "15.26.0",
+    "firestore-snapshot-utils": "^3.0.1",
+    "scdate-testing": "^7.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ericvera/firebase-kit.git",

@@ -826,3 +826,248 @@ same review.
   `yarn lint-changed` on the same files exits 0. This commit was made with
   `dist/` deleted, so the hook itself ran the build path.
 - `/Users/eric/Code/okven` unmodified (`git status` clean there).
+
+## 2.3 — `firebase-kit-admin` source landed, emulator suite wired into the root commands
+
+- Key changes (on `feat/publish-firebase-kit-packages`):
+  - `packages/firebase-kit-admin/src/` — all 147 files copied from
+    `/Users/eric/Code/okven/packages/firebase-kit-admin`. **120 are
+    byte-identical; 27 differ**, 26 of them driven by a lint finding and one
+    (`__test__/setup/vi.setup.ts`) a comment fixing a cross-reference to a script
+    name that no longer exists (`ci:test-emulator` → `test-emulator`). Okven's
+    working tree is untouched (`git status` clean there).
+  - `packages/firebase-kit-admin/firebase.json` and `firestore.rules` — copied,
+    byte-identical to Okven (`diff` clean).
+  - `packages/firebase-kit-admin/vitest.config.ts` — byte-identical to Okven.
+    Both named projects (`unit`, `emulator`), the filename-based split,
+    `root` at `src` in **both**, `mockReset: true` repeated in each, and the two
+    explanatory comments all preserved.
+  - `packages/firebase-kit-admin/tsconfig.json` — Okven's file with
+    `removeComments` `true` → `false` (same comment as 2.1/2.2); keeps
+    `references: [{ "path": "../firebase-kit-protocol" }]`.
+  - `packages/firebase-kit-admin/package.json` — real manifest replacing the
+    placeholder. `type: module`, all **10** `exports` entries (`./mocks`
+    included), `files` (`dist` plus the three exclusions), `sideEffects: false`,
+    `engines.node >= 24`, `publishConfig.access public`, `version 0.0.1`
+    (**not** Okven's `0.0.0`), `dependencies: { "firebase-kit-protocol":
+    "workspace:*" }` (**not** `workspace:^`). Okven's peer / optional-peer
+    (`betterbe`, `firestore-snapshot-utils`, `vitest`) / dev dependencies carried
+    over with `eslint` pinned to the root's `^10.8.0` and `firebase-tools` to the
+    root's current `15.26.0` (1.4 recorded that dependabot moved it off
+    `15.23.0`). Scripts: `build`, `lint`, `test-unit`
+    (`tsc --build && vitest run --project=unit`), `test-emulator`, and
+    `test` (`yarn test-unit && yarn test-emulator`).
+  - `tsconfig.json` — third project reference, `./packages/firebase-kit-admin`.
+  - `yarn.lock` — the admin workspace's dependency graph.
+  - Root `package.json` is **unchanged**: `test:unit` / `test:emulator` already
+    `foreach` over every workspace, so declaring the two colon-free scripts in
+    the package is what enrolls it. Verified with `--verbose`: `test-emulator`
+    runs for exactly one workspace, `test-unit` for two.
+
+### The emulator command
+
+`test-emulator` is
+`tsc --build && firebase emulators:exec --project demo-admin-tests --only auth,firestore "TZ=Etc/Universal vitest run --project=emulator"`
+— every element the task file lists is preserved, including the **absence** of
+`--config`. That is safe because `yarn workspaces foreach … run` executes a
+package script with the package directory as cwd, which is where `firebase.json`
+sits; this was confirmed by running the suite through the root command, not by
+reading the script. The three duplicated-config sites agree: `firebase.json`
+(auth `9298`, firestore `8281`, hub `4481`, logging `4581`, host `127.0.0.1`),
+the script's `--project demo-admin-tests`, and `src/__test__/setup/vi.setup.ts`
+(`projectIdBase: 'demo-admin-tests'`, `firestoreHost: '127.0.0.1:8281'`,
+`authHost: '127.0.0.1:9298'`).
+
+### Lint fallout — measured before fixing
+
+`eslint packages/firebase-kit-admin` on the freshly copied source: **178 errors,
+0 warnings, across 28 of the 148 linted files.** By rule:
+
+| count | rule |
+| ----- | ---- |
+| 51 | `@typescript-eslint/no-unsafe-call` |
+| 51 | `@typescript-eslint/no-unsafe-member-access` |
+| 19 | `@typescript-eslint/no-unsafe-assignment` |
+| 17 | `@typescript-eslint/require-await` |
+| 16 | `@typescript-eslint/restrict-template-expressions` |
+| 6 | `@typescript-eslint/consistent-type-definitions` |
+| 4 | `@typescript-eslint/unbound-method` |
+| 4 | `@typescript-eslint/no-unnecessary-type-parameters` |
+| 3 | `@typescript-eslint/no-unnecessary-condition` |
+| 2 | `@typescript-eslint/array-type` |
+| 1 each | `no-confusing-void-expression`, `no-unused-vars`, `only-throw-error`, `no-unsafe-argument`, `no-empty-function` |
+
+All 178 fixed by changing code. No rule disabled or downgraded, no
+`eslint-disable` anywhere in the package, and **no type assertion added** —
+`as`-token counts went 97 → 102 and a term-by-term diff shows all five additions
+are the English word "as" inside new comments. The single `@ts-expect-error` in
+`assertNever.test.ts` is Okven's, unchanged.
+
+Non-mechanical fixes worth recording:
+
+- **121 of the 178 findings (`no-unsafe-call` / `-member-access` /
+  `-assignment`) come from one root cause**: `vi.fn()` with no type argument is
+  `Mock<(...args: any[]) => any>`, so every chained call in
+  `createFirebaseAdmin{Storage,Functions,Firestore}Mock.test.ts` traverses `any`.
+  The `any` originates in the *published* factories, and no annotation at the
+  test site can launder it (assigning `any` to a typed local is itself
+  `no-unsafe-assignment`). The three factories are now typed: each spy is
+  `vi.fn<PlainFunctionType>()` and the object shapes they hand back are named
+  interfaces. Care was taken not to write `vi.fn<SomeInterface['method']>()`
+  where the member is already a `Mock`, which emits `Mock<Mock<…>>`; the first
+  pass did that and was corrected after reading the emitted declarations.
+- **`checkClaimsVersion`** (`no-unnecessary-condition` ×2): `claims?.v` looks
+  unnecessary because `user.customClaims` is asserted to `TClaims`, but
+  `customClaims` is genuinely `undefined` for a user whose claims were never
+  written — and `assertNever.test.ts`'s sibling case
+  `'rejects when the user has no stored claims at all'` exercises exactly that.
+  Dropping the chain would have turned that test's expected mismatch into a
+  `TypeError`. The stored version is now read off `user.customClaims?.['v']`,
+  where the optional chain is necessary by type. `auth.token?.` was dropped, as
+  `AuthData['token']` is non-optional.
+- **`validateSchema`** (`require-await`): the `async` keyword was removed and
+  both exits rebuilt as `Promise.reject(...)` / `Promise.resolve(...)`, so a
+  validation failure stays a *rejection* rather than becoming a synchronous
+  throw. The emitted signature is unchanged — this file is not in the `.d.ts`
+  diff.
+- **`createFirebaseAdminFunctionsMock`** (`require-await`, `only-throw-error`):
+  same treatment; every `throw` inside the enqueue implementation became a
+  `Promise.reject`, because a synchronous throw would have broken the three
+  `await expect(...).rejects` cases. `throw enqueueFailure` (an `unknown`) is
+  normalised the way task 2.2's `failEntriesWith` was: an `Error` is rejected
+  as-is, anything else is carried as the `cause` of one.
+- **`assertNever`** (`no-unused-vars` on `_`, plus
+  `no-confusing-void-expression` in its test): the parameter is renamed and
+  discarded with `void value`. The test's
+  `expect(assertNever(...)).toBeUndefined()` cannot be written at all under the
+  rule — a `void`/`undefined`-typed call may not be consumed by any expression,
+  including a variable initialiser — so it now calls through `vi.fn(assertNever)`
+  and asserts `toHaveReturnedWith(undefined)`, which checks the same fact
+  without changing the production signature.
+- **`assertNever.test.ts`'s if-else case** (`no-unnecessary-condition`): an
+  exhaustive if-else ending in `assertNever` structurally *requires* a final
+  always-true literal comparison — that redundancy is what leaves the `else` a
+  `never`. Comparing against a `Status`-typed constant silences the rule but
+  also stops the narrowing, so `assertNever(status)` then fails to compile
+  (tried, reverted). The branch now tests a `value is 'completed'` type guard:
+  inside the guard the comparison is against the full union, and at the call
+  site the negative predicate still narrows the `else` to `never`.
+- **The three `*DataPoint` builders** (`no-unnecessary-type-parameters` ×4):
+  inlining `TCollection` to its `string` constraint would delete the
+  compile-time collection-name check that `createFirestoreUtils`'s doc comment
+  calls "the point". Each builder instead declares a named call-signature
+  interface (`CollectionDataPoint<TCollection>` etc.) as its return type; using
+  the parameter as a *type argument* is what the rule accepts, and the emitted
+  type is structurally identical to the inline one it replaces.
+- `restrict-template-expressions` (16) fixed with `String(...)`, except in
+  `createFirebaseAdminAppMock` where hoisting `options?.projectId` into a
+  `const` restored the narrowing the closure had lost.
+- `unbound-method` (4): `expect(writer.set).toBeTypeOf('function')` →
+  `expect(typeof writer.set).toBe('function')`.
+- `require-await` in six test files: `async` callbacks with no `await` became
+  plain callbacks. Where the callee's signature demands a promise
+  (`Firestore.runTransaction`, `createRunTransaction`) the body now ends in
+  `return Promise.resolve(...)`; `createRunBatch` already accepted
+  `T | Promise<T>`.
+- **`src/__test__/utils/setFakeTimer.ts` was left alone**, as instructed. It
+  still hard-codes `TestTimeZone = 'America/Puerto_Rico'` with a comment about
+  a shared constant this package cannot reach — a fossil of the product this
+  code is leaving. Tests assert against it, so changing it is behaviour change.
+
+### Public surface: the whole emitted `.d.ts` diffed against Okven
+
+Okven's pristine `src/` was built in a scratch tree with the same TypeScript,
+the same `node_modules` and `removeComments: false`, giving **147 declaration
+files on each side** (count checked before trusting the diff — declaration emit
+being off would have made a clean diff meaningless). **15 files differ**, every
+difference accounted for:
+
+- **Structurally identical, textual only (6 files)** —
+  `TransactionReader.d.ts` (`Array<T>` → `T[]`); `createFirestoreUtils.d.ts`,
+  `__test__/db/testDB.d.ts` and the three `*DataPoint.d.ts` (inline call
+  signature → the named interface described above, plus the interface
+  declaration itself); `internal/assertNever.d.ts` (parameter renamed `_` →
+  `value`, which is not part of type identity, and the module is under
+  `src/internal/`, exported by no entry point).
+- **`type` → `interface` (4 files)** — `InitOptions`, `FirestoreUtilsOptions`
+  (both public), `CheckDocumentInQueryExistsOptions` (non-exported) and the
+  three `__test__/db/types.ts` fixtures. Forced by `consistent-type-definitions`,
+  which has no third option. The one observable consequence is that an interface
+  has no implicit index signature, so `InitOptions`/`FirestoreUtilsOptions` are
+  no longer assignable to `Record<string, unknown>`; both are option bags a
+  consumer builds as an object literal, and every in-repo use still compiles.
+- **Mock spies typed (3 files, plus the `__mocks__` re-export)** — the
+  `Mock<Procedure>` (`any`) entries on `createFirebaseAdmin{Storage,Functions,
+  Firestore}Mock`'s return values now carry real signatures, and
+  `createFirebaseAdminFunctionsMock` exports two new names (`TaskOptions`,
+  `MockTaskQueue`, `EnqueueTask`) because declaration emit needs them nameable
+  from the `__mocks__` barrel. This is a genuine narrowing of `./mocks`'s
+  published types and is the one change here that could affect a consumer — but
+  the `any` is exactly what `no-unsafe-*` forbids consuming, and it cannot be
+  removed at the call site. Nothing was published from this package before
+  `0.0.1`, which carries no code.
+
+Every other declaration file — including all of `auth/`, `callable/`,
+`errors/`, `runtime/`, `tasks/`, `testing/`, `validation/` and both
+`validateSchema` variants — is byte-identical to Okven's.
+
+### Deviations from plan
+
+- Root `package.json` needed no edit (see above); enrolment is by declaring the
+  two package scripts, which is the structure task 2.1 built.
+- `src/__test__/setup/vi.setup.ts` is the one non-lint source change: its
+  comment named `ci:test-emulator`, a script that does not exist in this repo.
+- The task file's step 7 asks to confirm the CI emulator job passes. **It could
+  not be exercised in this task** — see Verification.
+
+### Verification
+
+- `yarn install --immutable`, `yarn format`, `yarn lint`, `yarn build`,
+  `yarn test`, `yarn test:unit`, `yarn test:emulator` all exit 0, with `yarn
+  build` run from every `dist/` and `.tsbuildinfo` deleted. Working tree clean
+  after `yarn format`.
+- **Counts reconcile exactly.** `yarn test:unit` → **48 test files / 180 passing
+  cases** for `firebase-kit-admin` (client unchanged at 29/149). `yarn
+  test:emulator` → **7 test files / 21 passing cases**. Independently, the Okven
+  source holds 55 `*.test.ts` (48 non-emulator + 7 emulator) and, counted with a
+  word-boundary regex, 180 and 21 `it(` calls. `grep` for
+  `it.skip` / `it.only` / `.todo` returns nothing — no test deleted, skipped or
+  weakened.
+- **The `__mocks__` shims were proved active, not merely present**, two ways:
+  - Repointing `root` from `src` to the package directory (and fixing
+    `setupFiles` so the run still starts): **13 files failed, 29 of 179 cases
+    failed**, the suite running against the real `firebase-admin/*`. Restored,
+    back to 48/180.
+  - Removing `src/__mocks__/firebase-admin/app/`: 11 files fail to load,
+    156 cases run. Restored, back to 48/180.
+- **The two groups are independent.** `yarn test:unit` starts no emulator (runs
+  in ~1.7s with no `emulators:exec` output) and runs 48 files; the emulator
+  project runs 7. `yarn workspaces foreach --verbose run test-emulator` shows
+  **one** invocation, `firebase-kit-admin`; `run test-unit` shows two.
+- **Emulator tests need no real project or credentials.** The CLI logs
+  `Detected demo project ID "demo-admin-tests", emulated services will use a
+  demo configuration and attempts to access non-emulated services for this
+  project will fail.` No credential is configured anywhere.
+- `yarn workspace firebase-kit-admin pack --dry-run` lists `README.md`,
+  `package.json` and `dist/` only — no `__mocks__`, no `__test__`, no
+  `*.test.*`, and neither `firebase.json` nor `firestore.rules`. All 10
+  `exports` targets exist in `dist/`, `./mocks` included.
+- **`yarn info firebase-tools --name-only --json` still returns exactly one
+  line** (`"firebase-tools@npm:15.26.0"`). This matters: the composite action
+  appends it straight to `$GITHUB_OUTPUT`, so the admin package's pin must stay
+  byte-identical to the root's or the emulator cache key breaks.
+- `git -C /Users/eric/Code/okven status --short` is empty.
+- **The CI emulator job was NOT observed passing.** `publish.yml` triggers only
+  on push to `main` and `dependabot.yml` only on dependabot pull requests, so no
+  workflow runs on this feature branch, and this task is under an explicit
+  no-push instruction. What was verified instead: the composite action is
+  referenced before `yarn test` in both workflows, its `yarn info` contract still
+  holds with a second declarer of `firebase-tools` present, and the suite itself
+  passes locally against Java 21 (temurin, the same distribution the action
+  installs) with the emulator downloading its jar on demand. **The first real
+  execution of the CI emulator path is the merge to `main`.**
+- End-to-end tests: none — the project's test exception for library packages
+  with no e2e infrastructure applies. The substitute verification is the
+  emulator suite (7 files / 21 cases) passing locally, the 48/180 unit
+  reconciliation, the two automock activation experiments, and the whole-`.d.ts`
+  diff above.
