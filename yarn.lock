@@ -3073,6 +3073,10 @@ __metadata:
 "firebase-kit-protocol@workspace:packages/firebase-kit-protocol":
   version: 0.0.0-use.local
   resolution: "firebase-kit-protocol@workspace:packages/firebase-kit-protocol"
+  dependencies:
+    "@tsconfig/strictest": "npm:^2.0.8"
+    eslint: "npm:^10.8.0"
+    typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
 

@@ -12,11 +12,11 @@ export default defineConfig(
   {
     languageOptions: {
       parserOptions: {
-        // The root solution tsconfig is deliberately missing from this list.
-        // While its references array is empty it has no inputs at all, so
-        // TypeScript refuses to load it and every typed-lint parse fails.
-        // Add './tsconfig.json' back once the first package reference exists.
-        project: ['./tsconfig.eslint.json', './packages/*/tsconfig.json'],
+        project: [
+          './tsconfig.json',
+          './tsconfig.eslint.json',
+          './packages/*/tsconfig.json',
+        ],
         tsconfigRootDir: import.meta.dirname,
       },
     },

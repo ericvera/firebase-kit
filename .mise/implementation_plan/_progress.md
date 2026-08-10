@@ -485,3 +485,108 @@
   wiring applies. The substitute verification is the live green workflow run
   plus the registry, tag, and release checks above, exactly as the task file
   specifies.
+
+## 2.1 — `firebase-kit-protocol` source landed; real root `build` and per-package test orchestration
+
+- Key changes (on `feat/publish-firebase-kit-packages`):
+  - `packages/firebase-kit-protocol/src/{index,constants,types}.ts` — copied
+    byte-for-byte from `/Users/eric/Code/okven/packages/firebase-kit-protocol`
+    (`diff -r` clean). Okven's working tree is untouched.
+  - `packages/firebase-kit-protocol/tsconfig.json` — Okven's file with one
+    change: `removeComments` `true` → `false`, carrying the template's comment
+    `/* Keep comments. Otherwise intellisense does not work. */`.
+  - `packages/firebase-kit-protocol/package.json` — real manifest. Added `type:
+    module`, `exports: "./dist/index.js"` (string form), `sideEffects: false`,
+    `engines.node >= 24`, `files: ["dist", "!/**/__test__", "!*.test.*"]`,
+    `scripts` `build` (`tsc --build`) and `lint` (`eslint .`), and
+    `devDependencies` `@tsconfig/strictest ^2.0.8` / `eslint ^10.8.0` /
+    `typescript ^6.0.3`. **No `test` script of any kind.** The placeholder's
+    `name` / `version 0.0.1` / `description` / `license` / `repository` /
+    `publishConfig` were left exactly as published.
+  - `tsconfig.json` — `references: [{ "path": "./packages/firebase-kit-protocol" }]`.
+  - `package.json` — all four phase-1 stubs replaced. `build` is now `tsc
+    --build`; `test:unit` / `test:emulator` are `yarn build && yarn workspaces
+    foreach --all --exclude @firebase-kit/monorepo run <test-unit|test-emulator>`;
+    `test` is `yarn test:unit && yarn test:emulator`. The `-- STUBS: … --` marker
+    key is gone.
+  - `eslint.config.mjs` — `'./tsconfig.json'` restored to `parserOptions.project`
+    and the 1.1 omission comment removed. Confirmed `yarn lint` stays green and
+    that `eslint .` reports all three `src/*.ts` files in its file list.
+  - `yarn.lock` — only the protocol workspace's new devDependency descriptors
+    (+4 lines). No resolution changed.
+
+### Deviations from plan
+
+- **Per-package test scripts are named `test-unit` and `test-emulator`, not
+  Okven's `ci:test` / `ci:test-emulator`, and their names must stay colon-free.**
+  Tasks 2.2 and 2.3 must use these names. Yarn 4's `run` command has a global
+  script fallback for any script name containing a colon: `yarn run <name>` in a
+  workspace that does not define `<name>` will execute *another* workspace's
+  script when exactly one workspace defines it (`yarn-4.18.0.cjs`:
+  `!this.topLevel && !this.binariesOnly && this.scriptName.includes(":")` →
+  filter workspaces with the script → `if (m.length === 1) executeWorkspaceScript`).
+  Two failures were observed and fixed because of it:
+  - The first draft used root-matching names (`foreach … run test:unit`). Because
+    only the root defines `test:unit`, every child workspace's `yarn run
+    test:unit` resolved back to the root script — `yarn test:unit` recursed
+    infinitely and had to be killed.
+  - The second draft used Okven's `ci:test` / `ci:test-emulator`. With **two**
+    definers `ci:test` behaved correctly (one run per definer), but with a
+    **single** definer `ci:test-emulator` ran three times — once per workspace,
+    every one of them executing `firebase-kit-admin`'s script (proved by having
+    the script print `process.cwd()`). Under Okven's names, task 2.3's emulator
+    suite would have run three times per invocation.
+  With colon-free names the fallback does not apply: `foreach run` executes the
+  script only in workspaces that declare it. A `-- TESTS: … --` marker key in the
+  root scripts block records the constraint.
+- Package `devDependencies` were carried over from Okven (the task file does not
+  list them), but pinned to the **root's** ranges rather than Okven's, per the
+  maintainer's dependency policy — `typescript ^6.0.3` (6.x; typescript-eslint
+  does not support TS 7) and `eslint ^10.8.0` (root's range, not Okven's
+  `^10.7.0`). No `@types/node` is needed here. Task 2.4 still owns the audit.
+
+### Verification
+
+- `yarn install --immutable`, `yarn format`, `yarn lint`, `yarn build`,
+  `yarn test`, `yarn test:unit`, `yarn test:emulator` all exit 0 from a deleted
+  `dist/` and `.tsbuildinfo`; the working tree is clean after `yarn format`.
+- **The restored `build` really compiles, verified by making it fail.** A
+  temporary `src/probe.ts` with `export const probe: number = 'not a number'`
+  made `yarn build` exit 1 with `error TS2322`; removing it restored a green
+  build. `yarn build` emits `dist/{index,constants,types}.{js,d.ts}` — six files.
+- **`removeComments: false` verified by reading the emitted declarations**, not
+  by reading the config: `dist/types.d.ts` and `dist/constants.d.ts` retain every
+  JSDoc block, including the enum member comment `/** Operation completed
+  successfully */`.
+- **The per-package orchestration was proved empirically, not by reasoning.**
+  Temporary `test-unit` / `test-emulator` scripts printing `process.cwd()` were
+  added to the two placeholder packages and then reverted:
+  - `yarn test:unit` → exactly two invocations (client, admin); protocol skipped.
+  - `yarn test:emulator` → exactly one invocation (admin); client and protocol
+    skipped.
+  - `yarn test` → both sequences, in order.
+  With no package declaring either script (the real current state) both commands
+  exit 0. This is the shape the task requires: protocol is excluded because it
+  declares no test script, not by a tolerance flag.
+- **No repository-wide "pass with no tests" setting exists.** `grep -rn
+  passWithNoTests` over the repo (excluding `node_modules` / `.yarn`) returns
+  nothing; phase 1 never introduced one and none was added.
+- Both test commands build first (`yarn build &&` prefix), so the `dist/`
+  resolution that tasks 2.2/2.3 depend on exists on a clean checkout.
+- `git status` in `/Users/eric/Code/okven` is clean — the source repository was
+  read only.
+- `yarn workspace firebase-kit-protocol pack --dry-run` lists exactly
+  `README.md`, `package.json`, and the six `dist/` files.
+- End-to-end tests: none — the project's test exception for library packages with
+  no e2e infrastructure applies. Substitute verification, from a scratch
+  directory outside the repo:
+  - **Runtime**: `node` ESM import of the built `dist/index.js` printed
+    `SuccessResult.Success = success`, all six `CallableErrorCode` keys, and
+    `client/rate-limit-exceeded`.
+  - **Types by package name**: a scratch project with
+    `node_modules/firebase-kit-protocol` symlinked to the package and
+    `moduleResolution: NodeNext` type-checked clean against `CallableMap`,
+    `WithAPIVersion`, `SuccessResponseData`, `IsEverythingOKResponseData`,
+    `CallableErrorCode`, and `SuccessResult`. `--traceResolution` confirms
+    `'firebase-kit-protocol'` resolves through `exports` to
+    `dist/index.d.ts@0.0.1`.
