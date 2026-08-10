@@ -3,6 +3,11 @@ import { FirebaseAdminErrorCode } from '../errors/constants.js'
 import { getErrorCode } from '../errors/getErrorCode.js'
 import { createFirebaseAdminFunctionsMock } from './createFirebaseAdminFunctionsMock.js'
 
+/** The queue handle `taskQueue` hands back. */
+interface MockTaskQueue {
+  enqueue: (data: unknown, options?: { id?: string }) => Promise<undefined>
+}
+
 it('records an enqueue against the queue it was opened on', async () => {
   const mock = createFirebaseAdminFunctionsMock()
 
@@ -21,7 +26,9 @@ it('rejects a second enqueue of the same task id', async () => {
 
   mock.resetFunctionsMock()
 
-  const queue = mock.getFunctions().taskQueue('general')
+  // The queue's `enqueue` is a deliberately untyped `vi.fn()`, so what it
+  // resolves with is named here rather than in the published mock.
+  const queue: MockTaskQueue = mock.getFunctions().taskQueue('general')
 
   await queue.enqueue({ entryId: '1' }, { id: 'cleanup-1' })
 

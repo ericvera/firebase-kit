@@ -2,7 +2,7 @@ import { type Mock, vi } from 'vitest'
 import { FirebaseAdminErrorCode } from '../errors/constants.js'
 
 /** Options a single `enqueue` call may carry. */
-export interface TaskOptions {
+interface TaskOptions {
   id?: string
   scheduleTime?: Date
   dispatchDeadlineSeconds?: number
@@ -22,16 +22,16 @@ interface QueueRecord {
   enqueueCalls: TaskRecord[]
 }
 
-/** The `enqueue` call the faked queue exposes. */
-export type EnqueueTask = (
-  data: unknown,
-  options?: TaskOptions,
-) => Promise<undefined>
-
-/** The queue handle `taskQueue` hands back. */
-export interface MockTaskQueue {
-  enqueue: Mock<EnqueueTask>
-}
+/**
+ * A rejection carrying `failure` exactly as it was armed, whatever it is.
+ * Throwing is what keeps a non-Error value intact — rejecting one directly is
+ * not allowed here, and normalising it would change what a caller observes as
+ * the rejection reason.
+ */
+const rejectWithFailure = (failure: unknown): Promise<never> =>
+  Promise.resolve().then(() => {
+    throw failure
+  })
 
 /**
  * Builds the stand-in a test suite re-exports from its
@@ -54,8 +54,12 @@ export const createFirebaseAdminFunctionsMock = () => {
   // test its handling of failures the queue would otherwise never produce.
   let enqueueFailure: unknown
 
-  const enqueueMock = vi.fn<EnqueueTask>()
-  const taskQueueMock = vi.fn<(queueName: string) => MockTaskQueue>()
+  const enqueueMock = vi.fn()
+
+  // Only the queue name carries a type, because the enqueue implementation
+  // reads it back off this spy's last call and an untyped `vi.fn()` would make
+  // it `any`. The handle keeps the untyped `enqueue` spy.
+  const taskQueueMock = vi.fn<(queueName: string) => { enqueue: Mock }>()
 
   const functions = {
     taskQueue: taskQueueMock,
@@ -75,14 +79,7 @@ export const createFirebaseAdminFunctionsMock = () => {
     // rejection even though nothing here is awaited.
     enqueueMock.mockImplementation((data: unknown, options?: TaskOptions) => {
       if (enqueueFailure !== undefined) {
-        // An armed failure that is already an Error is rejected as-is;
-        // anything else is carried as the cause of one, so the rejection is
-        // an Error either way.
-        return Promise.reject(
-          enqueueFailure instanceof Error
-            ? enqueueFailure
-            : new Error('Enqueue failed', { cause: enqueueFailure }),
-        )
+        return rejectWithFailure(enqueueFailure)
       }
 
       const queueName = taskQueueMock.mock.lastCall?.[0]

@@ -1,12 +1,40 @@
 import { expect, it } from 'vitest'
 import { createFirebaseAdminStorageMock } from './createFirebaseAdminStorageMock.js'
 
+/** The `File` surface the faked bucket hands back. */
+interface MockFile {
+  save: (
+    content: Buffer | string,
+    options?: { contentType?: string },
+  ) => Promise<undefined>
+  download: () => Promise<[Buffer]>
+  delete: () => Promise<unknown[]>
+  exists: () => Promise<[boolean]>
+  makePublic: () => Promise<unknown[]>
+  makePrivate: () => Promise<unknown[]>
+}
+
+/** The `Bucket` surface the faked storage instance hands back. */
+interface MockBucket {
+  file: (filePath: string) => MockFile
+}
+
+/** The instance the faked module entry points hand back. */
+interface MockStorage {
+  bucket: () => MockBucket
+}
+
 const createMock = () => {
   const mock = createFirebaseAdminStorageMock()
 
   mock.resetStorageMock()
 
-  return mock
+  // The factory's spies are deliberately untyped `vi.fn()`s, which makes
+  // everything reached through them `any`. The chain is named here instead, so
+  // the published mock keeps its types and the cases below keep their shape.
+  const getStorage: () => MockStorage = mock.getStorage
+
+  return { ...mock, getStorage }
 }
 
 it('saves a file and reads its content back', async () => {

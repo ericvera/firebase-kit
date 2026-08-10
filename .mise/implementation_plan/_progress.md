@@ -1071,3 +1071,158 @@ Every other declaration file — including all of `auth/`, `callable/`,
   emulator suite (7 files / 21 cases) passing locally, the 48/180 unit
   reconciliation, the two automock activation experiments, and the whole-`.d.ts`
   diff above.
+
+## 2.3 (review fix) — `./mocks` published types restored to Okven's, mock rejection behaviour restored, weakened test restored
+
+Four defects found in `162fc21`. All four fixed; source edits stay inside the
+seven files below and nothing outside `packages/firebase-kit-admin/src/`
+changed.
+
+- **Defect 1 — a weakened test.** `firestore/internal/createRunBatch.test.ts`
+  had `require-await` fixed by deleting `async` and leaving `return 'written'`,
+  which made the case shape-identical to the sibling
+  `'commits after a synchronous callback with no return value'` while its name
+  still claimed it awaited a promise. Now `return Promise.resolve('written')`,
+  the same device already used in `createRunTransaction.test.ts` and the two
+  emulator files. `createRunBatch` still awaits a promise-returning callback and
+  still returns its value; the inline snapshot is unchanged.
+
+- **Defect 2 — `./mocks` published types were narrowed with no finding forcing
+  it.** The 121 `no-unsafe-*` findings the retype was justified by are almost
+  entirely in the three `*Mock.test.ts` files, which the package excludes from
+  publication. Per-file, the published factories carried **0** findings
+  (firestore) and **8 `require-await`** (storage).
+  - `mocks/createFirebaseAdminFirestoreMock.ts` is now **byte-identical to
+    Okven** — 7 type aliases and 4 interfaces removed, all 6 `vi.fn()` untyped
+    again.
+  - `mocks/createFirebaseAdminStorageMock.ts` is Okven's file plus **only** the
+    8 `require-await` fixes (`async` implementation → explicit
+    `Promise.resolve(...)`); 10 type aliases and 2 interfaces removed, all 11
+    `vi.fn()` untyped again.
+  - The test-file findings are resolved **in the test files**, which are not
+    published. Each declares the faked surface locally and binds the entry point
+    through it — `const firestore: MockFirestore = mock.getFirestore()`,
+    `const getStorage: () => MockStorage = mock.getStorage` (the storage helper
+    returns `{ ...mock, getStorage }`, so every case body is untouched), and
+    `const queue: MockTaskQueue = mock.getFunctions().taskQueue('general')`.
+    This works because the sender is the typed `Mock<…>`/`storage` object rather
+    than an `any`, which is what `no-unsafe-assignment` reports on; annotating an
+    `any` directly would still have been a finding. No assertion, no suppression.
+  - `mocks/createFirebaseAdminFunctionsMock.ts` keeps a type, narrowed to what
+    its own findings require: **only** `taskQueueMock`, whose parameter is read
+    back as `taskQueueMock.mock.lastCall?.[0]`. It is now
+    `vi.fn<(queueName: string) => { enqueue: Mock }>()`. `enqueueMock` is
+    `vi.fn()` again, so its published type matches Okven's exactly.
+
+- **Defect 3 — silent runtime behaviour change, resolved without a
+  suppression.** `setEnqueueFailure(failure: unknown)` had started rejecting a
+  non-`Error` failure as `new Error('Enqueue failed', { cause: failure })`. The
+  raw value is restored. The escape the review asked about exists:
+  `prefer-promise-reject-errors` sets `allowThrowingUnknown: false`, so
+  `Promise.reject(value)` and `new Promise((_, reject) => reject(value))` are
+  both flagged — but `only-throw-error` sets `allowThrowingUnknown: **true**`,
+  and the reason the original `throw enqueueFailure` was flagged at all is that
+  `if (enqueueFailure !== undefined)` narrows `unknown` to `{}`. Passing the
+  value through a module-scope helper whose parameter is declared `unknown`
+  restores the wide type:
+
+  ```ts
+  const rejectWithFailure = (failure: unknown): Promise<never> =>
+    Promise.resolve().then(() => {
+      throw failure
+    })
+  ```
+
+  No `eslint-disable`, no assertion, no rule change. **Nothing to raise under
+  step 9.**
+
+- **Defect 4 — unrequested new exports on `./mocks`.** `TaskOptions` is a
+  non-exported `interface` again, and `EnqueueTask` / `MockTaskQueue` are gone
+  entirely. Confirmed from a consumer: importing any of the three from
+  `firebase-kit-admin/mocks` is `TS2305`, while Okven's own `TaskRecord` still
+  resolves.
+
+### Deviations from plan
+
+- **The review's suggested fix for defect 4 — "make these local again" — does
+  not compile.** `src/__mocks__/firebase-admin/functions/index.ts` destructures
+  the factory's result into new exported `const`s, so declaration emit for
+  *that* file has to name the types; with them local, `tsc --build` fails with
+  three `TS4023 … but cannot be named` (verified). The sibling storage/firestore
+  factories are unaffected only because no `__mocks__` barrel re-exports them.
+  Removing the two names outright and inlining the one shape still needed
+  (`{ enqueue: Mock }`, `Mock` being nameable from `vitest`) satisfies both the
+  no-new-exports requirement and declaration emit, and narrows less than the
+  local-type version would have.
+- `firestore/internal/create{,Sub,NestedSub}CollectionDataPoint.ts` still export
+  the three named call-signature interfaces `no-unnecessary-type-parameters`
+  forced in 2.3. They are **additive**, and `src/firestore/index.ts` does not
+  re-export those modules, so they are reachable from no entry point — the same
+  status as `src/internal/`. Left as-is; flagged here because they are the only
+  remaining new exported names in the package.
+
+### Verification
+
+- **Whole emitted `.d.ts` surface diffed against pristine Okven again.** Okven's
+  untouched `src/` built in a scratch tree with this repo's `tsconfig.json`,
+  `node_modules` and TypeScript. **147 declaration files on each side, file
+  lists identical** (checked before trusting the diff). **12 files differ**, down
+  from 15:
+  - **Gone from the diff** — `mocks/createFirebaseAdminStorageMock.d.ts` and
+    `mocks/createFirebaseAdminFirestoreMock.d.ts` are now byte-identical to
+    Okven's.
+  - **Still differing, unpublished (3)** — `__mocks__/firebase-admin/functions/
+    index.d.ts` and `__test__/db/{testDB,types}.d.ts`. Both directories are
+    excluded by `files`.
+  - **Still differing, published, previously assessed and accepted (8)** — the
+    four `type`→`interface` conversions (`types.d.ts` `InitOptions`,
+    `firestore/types.d.ts` `FirestoreUtilsOptions`,
+    `firestore/checkDocumentInQueryExists.d.ts`, plus the `__test__` fixtures),
+    `firestore/internal/TransactionReader.d.ts` (`Array<T>` → `T[]`),
+    `internal/assertNever.d.ts` (parameter rename), and
+    `firestore/createFirestoreUtils.d.ts` + the three `*DataPoint.d.ts`
+    (structurally identical named call signatures).
+  - **Still differing, published, genuinely narrowed (1)** —
+    `mocks/createFirebaseAdminFunctionsMock.d.ts`: `taskQueueMock` (and
+    `getFunctions().taskQueue`) is `Mock<(queueName: string) => { enqueue: Mock
+    }>` instead of `Mock<Procedure>`. Required by the file's own
+    `no-unsafe-assignment`/`no-unsafe-argument`. `enqueueMock` is back to
+    `Mock<Procedure>`.
+- **Consumer probe against the built `dist/`**, compiled with
+  `moduleResolution: NodeNext` through the `firebase-kit-admin/mocks` entry
+  point. The three calls the review cited as breaking now compile:
+  `fs.doc.mockImplementation((path: string) => ({ path }))`,
+  `storage.deleteMock.mockResolvedValue([{ status: 200 }])` and
+  `storage.bucketMock.mockReturnValue({ name: 'my-bucket' })`, plus
+  `getMetadataMock.mockResolvedValue`, `saveMock.mockImplementation` with a
+  different signature, `collection.mockReturnValue`, and
+  `enqueueMock.mockResolvedValue`. The probe was proved sensitive by the
+  `TS2305` run above.
+- **Defect 3 verified behaviourally**, not by reading the code: a throwaway
+  spec armed `{ code: 'RESOURCE_EXHAUSTED' }` and asserted
+  `rejects.toBe(armed)` — passes, i.e. the rejection reason is the same object,
+  not an `Error` wrapping it. A second case asserts an armed `Error` rejects
+  with that same instance. The file was deleted after the run; no test was added
+  to the suite.
+- `yarn format` (working tree clean afterwards), `yarn lint`, `yarn build`,
+  `yarn test` all exit 0 **from every `dist/` and `.tsbuildinfo` deleted**.
+- **Counts unchanged and reconciled**: `yarn test:unit` → **48 files / 180
+  passing** for admin (client still 29/149); `yarn test:emulator` → **7 files /
+  21 passing**. `grep` for `it.skip` / `it.only` / `.todo` / `xit(` across the
+  package returns nothing.
+- No rule disabled or downgraded; `grep` for `eslint-disable` / `@ts-ignore` /
+  `@ts-expect-error` over `src/` returns exactly one hit, Okven's pre-existing
+  `@ts-expect-error` in `internal/assertNever.test.ts`. `as`-token counts on the
+  seven touched files are unchanged from Okven except for three occurrences of
+  the English word "as" in new comments; the only real assertion in them,
+  `(error as { code?: string })`, is Okven's.
+- `src/` now differs from Okven in **29 files** (was 27): the firestore mock
+  factory left the list, the three mock test files joined it.
+  `firebase.json` and `firestore.rules` are still byte-identical.
+- `yarn workspace firebase-kit-admin pack --dry-run` still lists all of
+  `dist/mocks/` and neither `__mocks__` nor `__test__` nor any `*.test.*`.
+- `git -C /Users/eric/Code/okven status --short` is empty.
+- End-to-end tests: none — the project's test exception for library packages
+  with no e2e infrastructure applies. The substitute verification is the
+  147-file `.d.ts` diff, the consumer probe, the behavioural defect-3 spec, and
+  the 48/180 + 7/21 reconciliation above.

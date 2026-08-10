@@ -1,40 +1,5 @@
-import { type Mock, vi } from 'vitest'
+import { vi } from 'vitest'
 import type { FirebaseAdminFirestoreMockOptions } from './types.js'
-
-// Every call signature below takes `...args: unknown[]`: the faked surface
-// ignores its arguments entirely and a test chains it with as many or as few
-// as the call it is standing in for would carry.
-type OpenDocument = (...args: unknown[]) => object
-type RunQuery = (...args: unknown[]) => Promise<MockQuerySnapshot>
-type FilterQuery = (...args: unknown[]) => MockQuery
-type LimitQuery = (...args: unknown[]) => MockQuery
-type SelectFields = (...args: unknown[]) => Mock<FilterQuery>
-type OpenCollection = (...args: unknown[]) => MockCollection
-type ConvertCollection = (...args: unknown[]) => MockConvertedCollection
-
-/** What the faked `get` resolves with. */
-interface MockQuerySnapshot {
-  doc: Mock<OpenDocument>
-}
-
-/** The chainable query surface `where` and `limit` hand back. */
-interface MockQuery {
-  where: Mock<FilterQuery>
-  get: Mock<RunQuery>
-  limit: Mock<LimitQuery>
-  select: Mock<SelectFields>
-}
-
-/** What `withConverter` hands back. */
-interface MockConvertedCollection {
-  doc: Mock<OpenDocument>
-  where: Mock<FilterQuery>
-}
-
-/** The collection surface `collection` hands back. */
-interface MockCollection {
-  withConverter: Mock<ConvertCollection>
-}
 
 /**
  * Builds the stand-in a test suite re-exports from its
@@ -49,12 +14,12 @@ export const createFirebaseAdminFirestoreMock = ({
   databaseId,
 }: FirebaseAdminFirestoreMockOptions) => {
   // Create the core firestore mock functions
-  const collection = vi.fn<OpenCollection>()
-  const doc = vi.fn<OpenDocument>()
-  const get = vi.fn<RunQuery>()
-  const limit = vi.fn<LimitQuery>()
-  const select = vi.fn<SelectFields>()
-  const where = vi.fn<FilterQuery>()
+  const collection = vi.fn()
+  const doc = vi.fn()
+  const get = vi.fn()
+  const limit = vi.fn()
+  const select = vi.fn()
+  const where = vi.fn()
 
   // Configure return values
   doc.mockReturnValue({})
@@ -80,7 +45,7 @@ export const createFirebaseAdminFirestoreMock = ({
   })
 
   collection.mockReturnValue({
-    withConverter: vi.fn<ConvertCollection>().mockReturnValue({ doc, where }),
+    withConverter: vi.fn().mockReturnValue({ doc, where }),
   })
 
   // Create the Firestore instance

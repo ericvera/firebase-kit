@@ -43,7 +43,7 @@ it('commits after an async callback resolves and returns its value', async () =>
   const result = await runBatch(() => {
     state.log.push('callback')
 
-    return 'written'
+    return Promise.resolve('written')
   })
 
   // Verify: the batch is created before the callback, the commit only happens

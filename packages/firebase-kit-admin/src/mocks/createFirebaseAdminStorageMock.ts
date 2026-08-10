@@ -1,4 +1,4 @@
-import { type Mock, vi } from 'vitest'
+import { vi } from 'vitest'
 
 /** One file held by the in-memory bucket. */
 interface FileRecord {
@@ -8,50 +8,6 @@ interface FileRecord {
   createdAt: Date
   updatedAt: Date
   isPublic: boolean
-}
-
-/** Metadata shape the faked `getMetadata` resolves with. */
-interface MockFileMetadata {
-  name: string | undefined
-  contentType: string | undefined
-  size?: number
-  timeCreated?: string
-  updated?: string
-}
-
-type DownloadFile = () => Promise<[Buffer]>
-type UploadFile = () => Promise<[{ name: string }]>
-type SaveFile = (
-  content: Buffer | string,
-  options?: { contentType?: string },
-) => Promise<undefined>
-type DeleteFile = () => Promise<never[]>
-type CheckFileExists = () => Promise<[boolean]>
-type ReadFileMetadata = () => Promise<[MockFileMetadata]>
-type SetFileVisibility = () => Promise<never[]>
-type OpenFile = (filePath: string) => MockFile
-type OpenBucket = () => MockBucket
-
-/** The `File` surface the faked bucket hands back. */
-interface MockFile {
-  download: Mock<DownloadFile>
-  upload: Mock<UploadFile>
-  save: Mock<SaveFile>
-  delete: Mock<DeleteFile>
-  exists: Mock<CheckFileExists>
-  getMetadata: Mock<ReadFileMetadata>
-  makePublic: Mock<SetFileVisibility>
-  makePrivate: Mock<SetFileVisibility>
-}
-
-/** The `Bucket` surface the faked storage instance hands back. */
-interface MockBucket {
-  file: Mock<OpenFile>
-  upload: Mock<UploadFile>
-  exists: Mock<CheckFileExists>
-  delete: Mock<DeleteFile>
-  getFiles: Mock
-  create: Mock
 }
 
 /**
@@ -69,18 +25,18 @@ export const createFirebaseAdminStorageMock = () => {
   // below reads the path the last `file()` call named.
   let currentFilePath: string | undefined
 
-  const bucketMock = vi.fn<OpenBucket>()
+  const bucketMock = vi.fn()
   const getFilesMock = vi.fn()
   const createMock = vi.fn()
-  const fileMock = vi.fn<OpenFile>()
-  const downloadMock = vi.fn<DownloadFile>()
-  const uploadMock = vi.fn<UploadFile>()
-  const saveMock = vi.fn<SaveFile>()
-  const deleteMock = vi.fn<DeleteFile>()
-  const existsMock = vi.fn<CheckFileExists>()
-  const getMetadataMock = vi.fn<ReadFileMetadata>()
-  const makePublicMock = vi.fn<SetFileVisibility>()
-  const makePrivateMock = vi.fn<SetFileVisibility>()
+  const fileMock = vi.fn()
+  const downloadMock = vi.fn()
+  const uploadMock = vi.fn()
+  const saveMock = vi.fn()
+  const deleteMock = vi.fn()
+  const existsMock = vi.fn()
+  const getMetadataMock = vi.fn()
+  const makePublicMock = vi.fn()
+  const makePrivateMock = vi.fn()
 
   const storage = {
     bucket: bucketMock,

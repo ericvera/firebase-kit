@@ -2,6 +2,28 @@ import { FieldPath, Timestamp } from 'firebase-admin/firestore'
 import { expect, it } from 'vitest'
 import { createFirebaseAdminFirestoreMock } from './createFirebaseAdminFirestoreMock.js'
 
+/** The chainable query surface `where` and `limit` hand back. */
+interface MockQuery {
+  where: () => MockQuery
+  limit: () => MockQuery
+  get: () => Promise<unknown>
+}
+
+/** What `withConverter` hands back. */
+interface MockConvertedCollection {
+  where: () => MockQuery
+}
+
+/** The collection surface `collection` hands back. */
+interface MockCollection {
+  withConverter: () => MockConvertedCollection
+}
+
+/** The instance the faked module entry points hand back. */
+interface MockFirestore {
+  collection: (collectionPath: string) => MockCollection
+}
+
 const createMock = () =>
   createFirebaseAdminFirestoreMock({
     actual: { FieldPath, Timestamp },
@@ -35,7 +57,12 @@ it('returns one shared instance from both entry points', () => {
 it('chains where and limit off a converted collection', async () => {
   const mock = createMock()
 
-  const collection = mock.getFirestore().collection('entries')
+  // The factory's spies are deliberately untyped `vi.fn()`s, which makes
+  // everything reached through them `any`. The chain is named here instead, so
+  // the published mock keeps its types.
+  const firestore: MockFirestore = mock.getFirestore()
+
+  const collection = firestore.collection('entries')
   const query = collection.withConverter().where().limit().where()
 
   // Verify: the query builder is chainable in the shapes a ref module uses,
