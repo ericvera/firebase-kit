@@ -4059,6 +4059,7 @@ __metadata:
   resolution: "firebase-kit-admin@workspace:packages/firebase-kit-admin"
   dependencies:
     "@tsconfig/strictest": "npm:^2.0.8"
+    "@types/node": "npm:^24.13.3"
     betterbe: "npm:^4.1.0"
     eslint: "npm:^10.8.0"
     firebase-admin: "npm:^13.10.0"
@@ -4076,8 +4077,6 @@ __metadata:
     firestore-snapshot-utils: ^3.0.1
     vitest: ^4.1.10
   peerDependenciesMeta:
-    betterbe:
-      optional: true
     firestore-snapshot-utils:
       optional: true
     vitest:
@@ -4090,6 +4089,7 @@ __metadata:
   resolution: "firebase-kit-client@workspace:packages/firebase-kit-client"
   dependencies:
     "@tsconfig/strictest": "npm:^2.0.8"
+    "@types/node": "npm:^24.13.3"
     eslint: "npm:^10.8.0"
     fake-indexeddb: "npm:^6.2.5"
     firebase: "npm:^12.16.0"

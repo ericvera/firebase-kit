@@ -1226,3 +1226,155 @@ changed.
   with no e2e infrastructure applies. The substitute verification is the
   147-file `.d.ts` diff, the consumer probe, the behavioural defect-3 spec, and
   the 48/180 + 7/21 reconciliation above.
+
+## 2.4 — Every package manifest audited against its own imports; `betterbe` promoted to a required peer
+
+- Key changes (on `feat/publish-firebase-kit-packages`) — three files, six lines:
+  - `packages/firebase-kit-admin/package.json` — `betterbe` removed from
+    `peerDependenciesMeta` (now a **required** peer); `@types/node ^24.13.3`
+    added to `devDependencies`.
+  - `packages/firebase-kit-client/package.json` — `@types/node ^24.13.3` added to
+    `devDependencies`.
+  - `yarn.lock` — the two new descriptors and the dropped optional flag. **Zero
+    resolution changes**; `@types/node@npm:^24.13.3` was already resolved at
+    `24.13.3` for the root.
+  - `packages/firebase-kit-protocol/package.json` and the root `package.json` are
+    **unchanged** — the audit moved nothing in either (see below).
+
+### The audit — the actual deliverable
+
+CI cannot detect this defect class (`nodeLinker: node-modules`, so every
+workspace sees every hoisted package), so the reconciliation was established by
+reading source, and then verified under a linker that has no hoisting at all.
+
+**Bare-specifier collection.** Every `import` / `export … from` / bare `import` /
+dynamic `import()` / `require()` / `vi.mock()` specifier was extracted from all
+232 `.ts`/`.mjs` files across the three packages, including test files,
+`__test__/` fixtures, `__mocks__/` shims and each `vitest.config.ts`. The
+resulting set is exactly the one the task file recorded during planning —
+`firebase-kit-protocol`, `firebase`, `firebase-admin`, `firebase-functions`,
+`betterbe`, `getsetdel`, `firestore-snapshot-utils`, `scdate-testing`,
+`fake-indexeddb/auto`, `vitest`, `node:path`, `node:crypto` — with nothing
+extra and nothing missing.
+
+**Entry-point reachability.** Rather than trusting the task file's table, a
+module graph was walked from each of the 18 declared `exports` entry points
+(1 protocol + 7 client + 10 admin), resolving `./x.js` specifiers back to their
+`.ts` sources and tracking **value** imports separately from `import type`:
+
+| package | entry point | value imports reached |
+| ------- | ----------- | --------------------- |
+| protocol | `.` | (none) |
+| client | `.`, `./connectivity`, `./runtime` | (none) |
+| client | `./callable` | `firebase` |
+| client | `./firestore` | `firebase`, `getsetdel` |
+| client | `./rate-limit` | `firebase-kit-protocol` |
+| client | `./testing` | `firebase`, `getsetdel`, `vitest` |
+| admin | `.` | `firebase-admin` |
+| admin | `./auth` | `firebase-admin`, `firebase-functions` |
+| admin | `./callable`, `./errors` | `firebase-functions` |
+| admin | `./firestore`, `./tasks` | `firebase-admin`, `firebase-functions` |
+| admin | `./mocks` | `vitest` |
+| admin | `./runtime` | (none) |
+| admin | `./testing` | `firebase-admin`, `firebase-kit-protocol`, `firestore-snapshot-utils`, `vitest`, `node:crypto` |
+| admin | `./validation` | `betterbe`, `firebase-functions` |
+
+This **confirms the task file's optional-peer table against the source**:
+`betterbe` has a value import (`ValidationError`, `validation/internal/validateSchema.ts`)
+reachable from `./validation`, a production entry point → required.
+`firestore-snapshot-utils` is value-imported only from `./testing`, and `vitest`
+only from `./mocks` and `./testing` → both stay optional. `firebase-admin` and
+`firebase-functions` are type-only from `./mocks` but value imports elsewhere,
+so both stay required.
+
+**Reconciliation, both directions.** Nothing used is undeclared and nothing
+declared is unused:
+
+- **protocol** — zero bare specifiers, zero Node built-ins, no `import.meta`, no
+  `process`. Declares no `dependencies` and no `peerDependencies`; its three
+  devDependencies (`@tsconfig/strictest`, `eslint`, `typescript`) are exactly
+  what its own `build` and `lint` scripts invoke. **Correctly declares no
+  `@types/node`.** No change.
+- **client** — `firebase-kit-protocol` runtime dep; `firebase` + `getsetdel`
+  required peers; `vitest` optional peer; `fake-indexeddb` dev-only
+  (`__test__/setup/vi.setup.ts`); dev copies of all three peers present.
+  `node:path` and `import.meta.dirname` in `vitest.config.ts` are the **only**
+  Node usage — `src/` has none, no `process.env` anywhere — so `@types/node` was
+  the one gap.
+- **admin** — `firebase-kit-protocol` runtime dep; `firebase-admin`,
+  `firebase-functions` and now `betterbe` required peers;
+  `firestore-snapshot-utils` + `vitest` optional; `scdate-testing` dev-only
+  (`__test__/utils/setFakeTimer.ts`); `firebase-tools` dev-only (the
+  `test-emulator` script). Node usage is in **published** source, not just
+  tooling — `node:crypto` in `testing/emulator/internal/createGetTestProjectId.ts`
+  and `process.env` in `createInit.ts`, `runtime/getRuntimeContext.ts`,
+  `firestore/internal/createGetFirestore.ts` and four `testing/emulator/internal/`
+  files — plus `node:path` / `import.meta.dirname` in `vitest.config.ts`.
+
+**`getsetdel` left at `^2.0.0`**, unwidened, per the recorded decision.
+**`firebase-tools`** is `15.26.0` at the root and `15.26.0` in admin — read from
+the current root manifest, not from the `15.23.0` string the 1.3 entry recorded
+before dependabot moved it.
+
+### Deviations from plan
+
+- **The root `package.json` needed no change.** The task file allows for the
+  audit moving something there. It does not: root `eslint.config.mjs` uses
+  `import.meta.dirname` and the root `tsconfig.eslint.json` program covers
+  `packages/*/vitest.config.ts`, so the root's own `@types/node` is used, and
+  every other root devDependency backs a root-only script (`prettier`, `husky`,
+  `lint-staged`) or the shared eslint config (`@eslint/js`,
+  `typescript-eslint`).
+- `@types/node` is declared at `^24.13.3` (the root's range, 24.x) and
+  `typescript` stays `^6.0.3`, per the maintainer's dependency policy.
+
+### Verification
+
+- **The reconciliation was verified under Yarn's PnP linker, which has no
+  hoisting**, because the node-modules linker cannot detect the defect class
+  this task addresses. A copy of the tree (tracked files + this branch's
+  manifests + lockfile) was installed in a scratch directory with
+  `nodeLinker: pnp`, where a package may resolve only what it declares:
+  - `yarn build` exits 0 and emits **230** declaration files. Because each
+    package's tsconfig is `include: ["src"]`, this type-checks every test file
+    and fixture too, so every collected specifier was resolved under strict
+    boundaries.
+  - `yarn test:unit` exits 0 with **48 files / 180 cases** (admin) and **29 /
+    149** (client) — identical to the node-modules run.
+  - **The harness was proved sensitive, not merely green.** Deleting one
+    declaration at a time and rebuilding: `scdate-testing` → `TS2307` in
+    `__test__/utils/setFakeTimer.ts`; `betterbe` → `TS2307` ×3 in
+    `validation/internal/validateSchema.ts(.test.ts)`; `fake-indexeddb` →
+    `TS2882` in `__test__/setup/vi.setup.ts`. Each restored to green.
+- **`@types/node` is the one declaration PnP cannot check**, and this was
+  established rather than assumed: removing it from the root *and* both packages
+  still builds, because TypeScript's automatic `@types` inclusion is not a
+  module-resolution boundary and `@types/node@26.2.0` is pulled in transitively
+  by `@grpc/grpc-js` and nine `@types/*` packages. That is precisely the reason
+  to declare it explicitly — without a declaration these packages compile against
+  whichever copy happens to be visible rather than the 24.x the policy pins.
+  Confirmed in the real tree: top-level `node_modules/@types/node` is `24.13.3`
+  and every `26.2.0` copy is nested under its own consumer.
+- **Okven independence re-verified after all copies landed**: `grep` for `@okv`
+  across `packages/` returns nothing; `git grep -i okven` over all tracked files
+  outside `.mise/` returns nothing; `git grep -E '/Users/|/home/'` over tracked
+  files (excluding the lockfile) returns nothing. `firebase.json` references only
+  `firestore.rules`, a sibling in the package.
+- `yarn info firebase-tools --name-only --json` returns **exactly one line**,
+  `"firebase-tools@npm:15.26.0"`, with the second declarer present — the CI
+  emulator cache key is intact.
+- `sideEffects: false` confirmed present on all three packages, read back
+  programmatically from the manifests after the edits.
+- `yarn install --immutable` exits 0 (lockfile in sync), `yarn format` leaves the
+  tree clean, `yarn lint`, `yarn build` (from every `dist/` and `.tsbuildinfo`
+  deleted) and `yarn test` all exit 0. Counts unchanged: **48/180** + **29/149**
+  unit, **7/21** emulator.
+- The four `YN0086` unmet peer warnings are **pre-existing and unrelated** —
+  measured at 4 before the change and 4 after, all of them inside `firebase`'s
+  own compat graph (`@firebase/*-compat` not providing `@firebase/app-types`).
+  None involves a firebase-kit workspace, `betterbe` or `getsetdel`.
+- `git -C /Users/eric/Code/okven status --short` is empty.
+- End-to-end tests: none — the project's test exception for library packages with
+  no e2e infrastructure applies. The substitute verification is the
+  import-versus-manifest reconciliation above, the strict-PnP build and test run,
+  and the three sensitivity probes.
