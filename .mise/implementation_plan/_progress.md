@@ -590,3 +590,162 @@
     `CallableErrorCode`, and `SuccessResult`. `--traceResolution` confirms
     `'firebase-kit-protocol'` resolves through `exports` to
     `dist/index.d.ts@0.0.1`.
+
+## 2.2 — `firebase-kit-client` source landed, wired to protocol, clean under the stricter lint
+
+- Key changes (on `feat/publish-firebase-kit-packages`):
+  - `packages/firebase-kit-client/src/` — all 80 files copied from
+    `/Users/eric/Code/okven/packages/firebase-kit-client`. 58 are byte-identical;
+    22 differ, every difference driven by a lint finding (list below). Okven's
+    working tree is untouched (`git status` clean there).
+  - `packages/firebase-kit-client/tsconfig.json` — Okven's file with
+    `removeComments` `true` → `false` (same comment as 2.1); keeps
+    `references: [{ "path": "../firebase-kit-protocol" }]`.
+  - `packages/firebase-kit-client/vitest.config.ts` — `root` still
+    `join(import.meta.dirname, 'src')` with its explanatory comment,
+    `mockReset: true`, the node_modules/dist excludes and
+    `setupFiles: ['./__test__/setup/vi.setup.ts']` all preserved. The single
+    project is now **named `unit`**, matching the name `firebase-kit-admin`
+    (task 2.3) will use for its unit group, so both packages are selected the
+    same way.
+  - `packages/firebase-kit-client/package.json` — real manifest replacing the
+    placeholder. `type: module`, all 7 `exports` entries, `files` (including
+    `!/**/__mocks__`), `sideEffects: false`, `engines.node >= 24`,
+    `publishConfig.access public`, `version 0.0.1` (**not** Okven's `0.0.0`),
+    `dependencies: { "firebase-kit-protocol": "workspace:*" }` (**not**
+    `workspace:^`), Okven's peer / optional-peer (`vitest`) / dev dependencies
+    carried over with `eslint` and `typescript` pinned to the root's ranges.
+    Scripts: `build`, `lint`, `test-unit` (`tsc --build && vitest run
+    --project=unit`) and `test` (`yarn test-unit`). No `test-emulator` script —
+    that is what keeps the package out of `yarn test:emulator`.
+  - `tsconfig.json` — second project reference, `./packages/firebase-kit-client`.
+  - `package.json` — root `lint` is now `yarn build && eslint .` (see
+    deviations).
+  - `yarn.lock` — the client workspace's dependency graph (firebase, getsetdel,
+    fake-indexeddb and their transitives).
+
+### Lint fallout — measured before fixing
+
+`yarn lint` on the freshly copied source: **51 errors, 0 warnings, across 21 of
+the 80 files.** By rule:
+
+| count | rule |
+| ----- | ---- |
+| 14 | `@typescript-eslint/restrict-template-expressions` |
+| 9 | `@typescript-eslint/no-empty-function` |
+| 9 | `@typescript-eslint/no-unnecessary-type-arguments` |
+| 4 | `@typescript-eslint/no-confusing-void-expression` |
+| 3 | `@typescript-eslint/prefer-promise-reject-errors` |
+| 2 | `@typescript-eslint/no-unnecessary-type-parameters` |
+| 2 | `@typescript-eslint/require-await` |
+| 1 each | `consistent-type-definitions`, `use-unknown-in-catch-callback-variable`, `no-unsafe-assignment`, `no-unsafe-argument`, `return-await`, `prefer-nullish-coalescing`, `no-unnecessary-condition`, `no-misused-promises` |
+
+Fixing the first pass surfaced 8 more `no-unnecessary-type-arguments` (the
+Firestore `Query` / `DocumentReference` *first* type argument is also a default,
+so `Query<DocumentData>` had to become `Query`) and then 5
+`no-unused-vars` for the `DocumentData` imports that left behind — **64
+findings resolved in total**. Every one was fixed by changing code: no rule was
+disabled or downgraded, there is no `eslint-disable`/`@ts-expect-error` anywhere
+in the package, and no type assertion was added (`as` occurrences went 123 → 126,
+all three being the English word "as" in new comments; the assertion count is
+unchanged).
+
+Non-mechanical fixes worth recording:
+
+- **`createActionableFunctionCaller`.** `TCommand` was used once, so
+  `no-unnecessary-type-parameters` fired; inlining its constraint would have
+  silently widened the public API (`A extends string & keyof TMap`). Instead
+  `RequestResponseMap` gained an optional command parameter
+  (`RequestResponseMap<TCommand extends string = string>`) and the caller now
+  constrains `TMap extends RequestResponseMap<TCommand>` — the same shape the
+  protocol's `CallableMap` already uses (`TMap extends Record<TCommand, …>`).
+  `ActionableFunctionCallerOptions` gained `TCommand` as its first parameter so
+  `rateLimitMap` is keyed by the group's commands rather than by `string`.
+  This is also what let the test's `TestMap` become an `interface`
+  (`consistent-type-definitions`) — an interface is not assignable to a
+  `Record<string, …>` index signature, but is assignable to
+  `Record<'get-entry' | 'update-order', …>`.
+- **`JSON.parse` is typed `any`**, which produced the `no-unsafe-assignment` /
+  `no-unsafe-argument` pair. Getting from `any` to a named type without an
+  assertion is impossible under these rules, so the round trip is held at
+  `unknown` (`const sanitizedData: unknown = …`, which the rule permits) and the
+  callable's *request* type parameter is now `unknown`. Nothing is lost: the
+  old `httpsCallable<WithAPIVersion<{ action: A } & TMap[A][0]>, …>` checked
+  nothing, because the `any` was passed straight into it. `WithAPIVersion` still
+  documents the stamped request, now as the annotation on `dataWithVersion`.
+- **`return-await`** was fixed by moving the `return reviveTimestamps(...)`
+  *out* of the `try`, not by adding `await` inside it. Adding the `await` would
+  have started wrapping timestamp-revival failures in `toActionableError`, which
+  is a behaviour change; the current shape preserves the original semantics.
+- **`no-misused-promises`** in `subscribeWithCache`: the async `onUpdates`
+  callback was extracted to a named `handleUpdates` and the callback now does
+  `void handleUpdates(updates)`. Rejections stay unhandled exactly as before.
+- **`prefer-nullish-coalescing`** in `ConnectivityError`: `message || default`
+  became an explicit `message === undefined || message === ''` ternary rather
+  than `??`, so a caller passing `''` still gets the default message.
+- **`prefer-promise-reject-errors`** (×3) was fixed by tightening the *declared*
+  types of the values being rejected (`unknown` → `Error | undefined`) rather
+  than by wrapping at the reject site. Every call site already passed an `Error`.
+- **`require-await`** in `createFirebaseFunctionsClientMock`: the `async`
+  keyword was dropped and every failure path returns `Promise.reject(...)`, so
+  the failures stay asynchronous instead of becoming synchronous throws.
+- **`no-empty-function`** (×9): `() => {}` became `() => undefined`.
+
+### Deviations from plan
+
+- **Root `lint` is now `yarn build && eslint .`.** This package is the first one
+  that imports another workspace, and typed linting resolves
+  `firebase-kit-protocol` through its `exports` to `dist/index.d.ts`. With no
+  `dist/` present, `yarn lint` fails with three `no-unsafe-*` errors on
+  `CallableErrorCode`. Verified both ways: with `packages/firebase-kit-protocol/dist`
+  deleted `yarn lint` exits 1; building only the protocol makes it exit 0. The
+  `yarn build &&` prefix is the same device task 2.1 used on `test:unit` /
+  `test:emulator`, for the same reason. CI already ran `yarn build` before
+  `yarn lint`, so the extra build there is an incremental no-op.
+- **The vitest project is named `unit`** rather than left unnamed, per the task's
+  step 4 — the shape task 2.3 needs. `test-unit` therefore selects
+  `--project=unit`, which will read identically in both packages.
+- Package `devDependencies` follow the maintainer's dependency policy rather
+  than Okven's exact strings: `eslint ^10.8.0` (root's range, not Okven's
+  `^10.7.0`) and `typescript ^6.0.3` (6.x). `getsetdel ^2.0.0` is left exactly
+  as-is in both peer and dev positions, as instructed. Task 2.4 still owns the
+  audit.
+
+### Verification
+
+- `yarn install --immutable`, `yarn format`, `yarn lint`, `yarn build`,
+  `yarn test`, `yarn test:unit`, `yarn test:emulator` all exit 0 **from a state
+  with both packages' `dist/` and `.tsbuildinfo` deleted**; the working tree is
+  clean after `yarn format`.
+- **Counts reconcile exactly.** `yarn test:unit` reports **29 test files / 149
+  passing cases**, and `yarn workspaces foreach --verbose` shows the runner
+  invoked for exactly one workspace (`firebase-kit-client`); protocol is skipped
+  because it declares no `test-unit`. Independently: 29 `*.test.ts` files and
+  149 `it(` occurrences in `src/`, matching the Okven source. `grep` for
+  `it.skip` / `it.only` / `.todo` / `describe` across the test files returns 0 —
+  no test was deleted, skipped, or weakened.
+- **The `__mocks__` shims were proved active, not merely present**, three ways:
+  - Pointing `root` at the package directory instead of `src` (and fixing the
+    `setupFiles` path so the run still starts): **2 files failed, 22 of 149 cases
+    failed**, with `TypeError: cachedEntries is not iterable` and snapshot
+    mismatches — the suite running against the *real* `getsetdel`. Restored, back
+    to 29/149.
+  - Removing `src/__mocks__/getsetdel/`: 2 files fail, 127 of 149 cases run.
+  - Removing `src/__mocks__/firebase/`: `getHostingFirestore.test.ts` fails to
+    load, 145 of 149 cases run.
+- `yarn test:emulator` runs nothing for this package (no `test-emulator` script),
+  and exits 0 — exclusion is structural, not a tolerance flag.
+- `yarn workspace firebase-kit-client pack --dry-run` lists 97 entries: `README.md`,
+  `package.json` and `dist/` only. No `__mocks__`, no `__test__`, no `*.test.*`.
+  All 7 `exports` targets exist in `dist/`.
+- `removeComments: false` confirmed by reading emitted declarations — the JSDoc
+  blocks survive into `dist/**/*.d.ts`.
+- The dynamic `import('firebase/functions')` is still dynamic: the new
+  `import type { HttpsCallableResult }` is erased, and
+  `dist/callable/createActionableFunctionCaller.js` has no static
+  `firebase/functions` import.
+- `git -C /Users/eric/Code/okven status --short` is empty — the source repository
+  was read only.
+- End-to-end tests: none — the project's test exception for library packages with
+  no e2e infrastructure applies. The substitute verification is the 29-file /
+  149-case reconciliation and the three automock activation experiments above.

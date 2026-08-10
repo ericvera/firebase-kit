@@ -3,5 +3,8 @@
 
   "files": [],
   "include": [],
-  "references": [{ "path": "./packages/firebase-kit-protocol" }]
+  "references": [
+    { "path": "./packages/firebase-kit-protocol" },
+    { "path": "./packages/firebase-kit-client" }
+  ]
 }

@@ -3,6 +3,54 @@
   "version": "0.0.1",
   "description": "Client-side Firebase toolkit for callable functions, Firestore, connectivity, and rate limiting.",
   "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./callable": "./dist/callable/index.js",
+    "./connectivity": "./dist/connectivity/index.js",
+    "./firestore": "./dist/firestore/index.js",
+    "./rate-limit": "./dist/rate-limit/index.js",
+    "./runtime": "./dist/runtime/index.js",
+    "./testing": "./dist/testing/index.js"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "!/**/__test__",
+    "!/**/__mocks__",
+    "!*.test.*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "lint": "eslint .",
+    "test": "yarn test-unit",
+    "test-unit": "tsc --build && vitest run --project=unit"
+  },
+  "dependencies": {
+    "firebase-kit-protocol": "workspace:*"
+  },
+  "peerDependencies": {
+    "firebase": "^12.16.0",
+    "getsetdel": "^2.0.0",
+    "vitest": "^4.1.10"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tsconfig/strictest": "^2.0.8",
+    "eslint": "^10.8.0",
+    "fake-indexeddb": "^6.2.5",
+    "firebase": "^12.16.0",
+    "getsetdel": "^2.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ericvera/firebase-kit.git",

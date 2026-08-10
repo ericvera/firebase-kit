@@ -12,7 +12,8 @@
   },
   "scripts": {
     "format": "prettier --write .",
-    "lint": "eslint .",
+    "-- LINT: builds first, so typed linting can resolve a package's dependency on another package's `dist` on a clean checkout --": "",
+    "lint": "yarn build && eslint .",
     "build": "tsc --build",
     "-- TESTS: one runner invocation per package; package script names must stay colon-free (Yarn treats a colon script defined by exactly one workspace as global, so foreach would run it once per workspace) --": "",
     "test": "yarn test:unit && yarn test:emulator",
