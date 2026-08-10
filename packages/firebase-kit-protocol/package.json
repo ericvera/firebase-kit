@@ -1,7 +1,16 @@
 {
   "name": "firebase-kit-protocol",
   "version": "0.0.1",
-  "description": "Shared protocol types and constants for the firebase-kit client and admin packages.",
+  "description": "Shared callable-function contract for firebase-kit: request and response types, API versioning, and the error codes that cross the wire.",
+  "keywords": [
+    "firebase",
+    "firebase-kit",
+    "cloud-functions",
+    "callable",
+    "protocol",
+    "types",
+    "typescript"
+  ],
   "license": "MIT",
   "type": "module",
   "exports": "./dist/index.js",

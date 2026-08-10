@@ -1,7 +1,21 @@
 {
   "name": "firebase-kit-admin",
   "version": "0.0.1",
-  "description": "Firebase Admin SDK toolkit for callable functions, Firestore, auth, tasks, and validation.",
+  "description": "Firebase Admin SDK toolkit: callable functions, Firestore transactions, auth checks, task queues, request validation, and emulator testing.",
+  "keywords": [
+    "firebase",
+    "firebase-kit",
+    "firebase-admin",
+    "firestore",
+    "cloud-functions",
+    "callable",
+    "auth",
+    "task-queue",
+    "validation",
+    "emulator",
+    "testing",
+    "typescript"
+  ],
   "license": "MIT",
   "type": "module",
   "exports": {

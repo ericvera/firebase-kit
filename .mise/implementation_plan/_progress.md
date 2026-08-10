@@ -1378,3 +1378,96 @@ before dependabot moved it.
   no e2e infrastructure applies. The substitute verification is the
   import-versus-manifest reconciliation above, the strict-PnP build and test run,
   and the three sensitivity probes.
+
+## 3.1 — Publication metadata (keywords, sharpened descriptions) and per-package `LICENSE`; tarball shape verified by packing
+
+- Key changes (on `feat/publish-firebase-kit-packages`) — six files:
+  - `packages/firebase-kit-{protocol,client,admin}/LICENSE` (new) — each a
+    byte-identical copy of the repository-root `LICENSE` (MIT, `Copyright (c)
+    2026 Eric Vera`), verified with `diff -q` against the root and again after
+    extraction from the built tarballs.
+  - `packages/firebase-kit-{protocol,client,admin}/package.json` — `keywords`
+    added and `description` rewritten. Nothing else in any manifest changed:
+    `version` stays `0.0.1`, `license` was already `MIT`, `repository` already
+    carried `directory: packages/<name>`, and **no `main` / `types` was added**
+    (absence is deliberate — types resolve through the `exports` map's
+    `.js` → `.d.ts` sibling rule).
+- Descriptions were grounded in each package's entry-point source, not in the
+  placeholder text, and each is one sentence under ~140 characters:
+  - protocol — "Shared callable-function contract for firebase-kit: request and
+    response types, API versioning, and the error codes that cross the wire."
+    (`CallableMap`, `WithAPIVersion`, `CallableErrorCode`, `SuccessResult`.)
+  - client — "Client-side Firebase toolkit: typed callable functions, Firestore
+    helpers, connectivity handling, rate limiting, and test mocks."
+  - admin — "Firebase Admin SDK toolkit: callable functions, Firestore
+    transactions, auth checks, task queues, request validation, and emulator
+    testing."
+- Keywords follow the shape of the sibling published packages under this account
+  (`firestore-snapshot-utils`, `scdate-testing`, `getsetdel` — read from
+  `node_modules`, all lower-case single concepts): protocol 7, client 10,
+  admin 12, each leading with `firebase` / `firebase-kit` and then the areas the
+  package actually covers.
+
+### The pack listings — recorded
+
+`yarn workspace <name> pack --dry-run`, run against the final manifests:
+
+| package | entries | non-`dist/` entries | `dist/mocks/*` |
+| ------- | ------- | ------------------- | -------------- |
+| `firebase-kit-protocol` | 9 | `LICENSE`, `README.md`, `package.json` | n/a |
+| `firebase-kit-client` | 97 | `LICENSE`, `README.md`, `package.json` | n/a |
+| `firebase-kit-admin` | 151 | `LICENSE`, `README.md`, `package.json` | **18** |
+
+Full listings were produced and checked programmatically rather than by eye (a
+script parsed each listing, cross-referenced it against that package's manifest,
+and failed on any violation):
+
+- **Every one of the 18 declared `exports` subpaths** (1 protocol + 7 client +
+  10 admin) resolves to a `.js` file present in its listing, **and** its sibling
+  `.d.ts` is present too — the latter checked because that sibling is the only
+  way types resolve with no `types` field. All 36 files present.
+- **`firebase-kit-admin`'s `./mocks` survives**: `dist/mocks/index.js` and
+  `dist/mocks/index.d.ts` are in the listing, alongside 16 more `dist/mocks/*`
+  files. The `files` exclusions match `__mocks__` (the module shims) and not
+  `mocks` (the published entry point), which is the distinction that would have
+  silently deleted a documented entry point.
+- **Absent from all three listings**: any `*.test.*`, anything under `__test__/`
+  or `__mocks__/`, any non-`.d.ts` `.ts` file, and anything under `src/`. Also
+  absent from admin: `firebase.json`, `firestore.rules`, `firestore-debug.log`,
+  `vitest.config.ts`, `tsconfig.json`.
+
+### Deviations from plan
+
+- **Steps 2, 4 and 5 were already satisfied** and needed no edit beyond the
+  rewrite: task 1.3's placeholder manifests already carried a `description`,
+  `license: MIT`, and a `repository` **including** `directory`, and tasks
+  2.1–2.3 preserved them. The task file's Background (written before 1.3
+  landed) says none of the three declares a description or a repository
+  subdirectory; that is stale. The descriptions were nonetheless rewritten
+  because `1.0.0` is the first impression and the placeholder text was thin.
+- The task file's Background also predates 2.1–2.3 on `engines`: the 1.3 entry
+  notes it deliberately omitted `engines` and left it to 3.1, but 2.1/2.2/2.3
+  already added `engines.node >= 24` to all three. Confirmed present; nothing
+  to do.
+
+### Verification
+
+- **The tarballs were built, not just dry-run.** `yarn workspace <name> pack
+  --out …` produced real `.tgz` files in a scratch directory; the `package.json`
+  inside each was extracted and read back, confirming the new `description` and
+  `keywords`, `license: MIT`, `repository.directory`, `version 0.0.1`, and
+  **no `main` and no `types` key**. The extracted `LICENSE` is `diff`-identical
+  to the root `LICENSE` in all three. The client's and admin's
+  `firebase-kit-protocol` dependency is rewritten from `workspace:*` to `0.0.1`
+  by Yarn's packer, as the project's test exception requires. No publish command
+  of any kind was run, and no tarball was written inside the repository.
+- `yarn install --immutable` exits 0 (no dependency moved, lockfile untouched),
+  `yarn format` reports all three manifests `unchanged`, `yarn lint`,
+  `yarn build`, `yarn test` all exit 0. Counts unchanged: **48/180** (admin) +
+  **29/149** (client) unit, **7/21** emulator.
+- `git -C /Users/eric/Code/okven status --short` is empty.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies (the repo's own tests import source directly and cannot
+  exercise a tarball). The substitute verification is the pack-listing
+  inspection, the 18-entry-point cross-check, and the built-tarball manifest and
+  `LICENSE` extraction above; the full consumer project is task 3.3.

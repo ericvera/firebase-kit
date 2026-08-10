@@ -1,7 +1,19 @@
 {
   "name": "firebase-kit-client",
   "version": "0.0.1",
-  "description": "Client-side Firebase toolkit for callable functions, Firestore, connectivity, and rate limiting.",
+  "description": "Client-side Firebase toolkit: typed callable functions, Firestore helpers, connectivity handling, rate limiting, and test mocks.",
+  "keywords": [
+    "firebase",
+    "firebase-kit",
+    "firestore",
+    "cloud-functions",
+    "callable",
+    "client",
+    "connectivity",
+    "rate-limit",
+    "testing",
+    "typescript"
+  ],
   "license": "MIT",
   "type": "module",
   "exports": {
