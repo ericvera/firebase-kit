@@ -1471,3 +1471,110 @@ and failed on any violation):
   exercise a tarball). The substitute verification is the pack-listing
   inspection, the 18-entry-point cross-check, and the built-tarball manifest and
   `LICENSE` extraction above; the full consumer project is task 3.3.
+
+## 3.2 — Root and per-package READMEs written from source; every code block type-checked against the built packages
+
+- Key changes (on `feat/publish-firebase-kit-packages`) — four files, all
+  rewritten from the phase-1 placeholders:
+  - `README.md` — scdate's root shape: tagline, `## Packages` with a link and
+    one-line description per package, `## Features`, `## Requirements`
+    (Node >= 24, ESM only), `## Maintainers` (the `MAINTAINERS.md` link task 1.3
+    added, kept verbatim), `## License`.
+  - `packages/firebase-kit-protocol/README.md` — 1 entry point, 3 code blocks.
+  - `packages/firebase-kit-client/README.md` — 7 entry points, 12 code blocks.
+  - `packages/firebase-kit-admin/README.md` — 10 entry points, 15 code blocks.
+- Each package README follows the template skeleton: title → bold tagline →
+  license and npm-version badges → `## Overview` → `## Features` →
+  `## Installation` (install command, then peers) → `## Requirements` →
+  `## Entry Points` (a table, one row per published subpath) → `## Usage` (one
+  section per entry point) → `## API Reference` → `## License`.
+- **The Usage sections are one worked app per package**, built bottom-up so each
+  file imports the ones before it — client: `hosting.ts` → `errors.ts` →
+  `rateLimit.ts` → `connectivity.ts` → `callSpaces.ts` → `db.ts` →
+  `spaceReads.ts` → the three `__mocks__` shims; admin: `runtime.ts` →
+  `init.ts` → `db.ts` → `spaceRefs.ts` → `renameSpace.ts` → `createSpace.ts` →
+  `schemas.ts` → `functions/spaces.ts` → `tasks/` → the testing and `__mocks__`
+  files. Every block carries a file-path header comment naming that file.
+- **Peer dependencies, per the task's emphasis:**
+  - client — `firebase ^12.16.0` and `getsetdel ^2.0.0` required, `vitest
+    ^4.1.10` optional (`./testing` only). The `getsetdel` major has its own
+    paragraph in Installation, not a footnote: it states that getsetdel is
+    published at `3.0.0`, that a project already on v3 hits a peer-resolution
+    conflict, and that the pin is deliberate. `fake-indexeddb` is called out
+    separately as a devDependency a Node test run needs, since it is not a peer.
+  - admin — `firebase-admin ^13.10.0`, `firebase-functions ^7.2.5` and
+    **`betterbe ^4.1.0`** required (with the reason: `./validation` is a
+    production entry point that imports it at runtime); `firestore-snapshot-utils
+    ^3.0.1` and `vitest ^4.1.10` optional, each named with the entry point it
+    unlocks.
+  - protocol — states explicitly that there are none.
+- Which examples cannot run standalone is stated in the prose that introduces
+  each Usage section: the client's need a browser environment (`window`,
+  `navigator`, IndexedDB) and an initialized Firebase app; the admin's need an
+  initialized Admin app and a reachable Firestore/Auth backend, and the
+  `*.emulator.test.ts` block says it needs a running emulator plus the setup
+  file shown above it.
+
+### Deviations from plan
+
+- **No `firebase-kit-protocol` import appears in a client or admin code block.**
+  It is a runtime `dependency` of both, so importing it from a consumer would
+  work only through hoisting — which neither package promises. The protocol
+  README documents its own usage, and both other READMEs point at it in prose
+  instead. The protocol README's Installation section states the same thing
+  ("relying on a transitive install is not something either package promises").
+- Two examples had to differ from the obvious spelling, both found by compiling
+  rather than by reading:
+  - `betterbe`'s `object()` infers `T` as `{ … : unknown }` from a schema
+    literal, because `StringValidator` carries no value type. The validation
+    example therefore passes the type argument explicitly
+    (`object<RenameSpaceData>({ … })`) and says why in a comment. Written the
+    natural way it fails with `TS2322`.
+  - A callable group's request/response map must be an `interface` that
+    **extends** `RequestResponseMap`; a bare interface does not satisfy the
+    caller's `Record<string, …>` constraint. Called out in the prose above the
+    block, matching the note the package's own test carries.
+
+### Verification
+
+- **Every code block was extracted to the path in its header comment and
+  type-checked against the built packages** — this task ran the substance of
+  task 3.3's check early rather than handing it forward unverified. Three
+  throwaway consumer projects outside the repo, each with `node_modules`
+  pointing at the workspace-linked packages (so imports resolve through the
+  published `exports` map into `dist/`, not into `src/`), `"type": "module"`,
+  and a tsconfig extending `@tsconfig/strictest` with `module`/`moduleResolution`
+  `NodeNext`. **`tsc --noEmit` exits 0 for all three**: 3 blocks (protocol),
+  12 (client), 15 (admin).
+  - The harness was proved sensitive, not merely green: the first run reported
+    the `betterbe` inference defect above as `TS2322`, which is how it was
+    found.
+  - Re-extracted and re-checked **after** `yarn format` reformatted the embedded
+    TypeScript, so what is committed is what compiles.
+- **Blocks without a path header: 0.** The extractor counts them and prints the
+  offender; all 30 blocks across the three READMEs were placed.
+- **Runtime behaviour of the runnable blocks confirmed by executing them**, not
+  by reading: `src/protocol/outcomes.ts` prints `{ result: 'success' }`,
+  `shouldRetry('functions/internal') === true`,
+  `isCallerBug('client/rate-limit-exceeded') === true`, `shouldRetry('x') ===
+  false`; `renameSpaceRequest.ts` prints the stamped envelope; the client's
+  `hosting.ts` reports `isDev() === false` with no `window` (the documented
+  server-render answer) and `errors.ts` unwraps a wrapped cause to
+  `functions/internal: {"a":1}` and an uncoded value to `unknown failure`.
+- **Coverage checked programmatically against the manifests**, not by eye: each
+  package's `exports` subpaths were resolved to their import specifiers and
+  searched for in its README — 1/1 protocol, 7/7 client, 10/10 admin, zero
+  missing. The same script checked every declared peer: all 8 (across the two
+  packages) appear by name **and** by version range, with the optional ones
+  named alongside the entry point they unlock.
+- `src/internal/` is documented nowhere; the three `*DataPoint` call-signature
+  interfaces the 2.3 review left exported are also absent, since no entry point
+  re-exports them.
+- `yarn format` (working tree clean on re-run), `yarn lint`, `yarn build`,
+  `yarn test` all exit 0. Counts unchanged: **48/180** (admin) + **29/149**
+  (client) unit, **7/21** emulator.
+- `git -C /Users/eric/Code/okven status --short` is empty.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies. The substitute verification is the extract-and-type-check run
+  above; task 3.3 repeats it against real packed tarballs in a project that
+  installs the peers itself, which is the part this task could not cover.
