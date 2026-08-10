@@ -9,6 +9,17 @@ updates:
     directory: '/' # Location of package manifests
     schedule:
       interval: 'weekly'
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet, so a major bump
+      # breaks `yarn lint` outright. Stay on 6.x until it does.
+      - dependency-name: 'typescript'
+        update-types:
+          - 'version-update:semver-major'
+      # Track the Node LTS the packages declare (`engines.node >= 24`) rather
+      # than the newest types release.
+      - dependency-name: '@types/node'
+        update-types:
+          - 'version-update:semver-major'
     groups:
       dev-non-major:
         applies-to: version-updates
