@@ -2041,3 +2041,131 @@ type-argument positions and produced no error at all.
   packed tarballs, the strict non-hoisting consumer with its sensitivity probe,
   the whole-surface `.d.ts` diff, the `./mocks` consumer probe, and the 30-block
   README re-check above.
+
+## 3.4 — Release readiness reconciled; the `1.0.0` squash message drafted (no merge, no push, no publish)
+
+- **No source or configuration file changed.** This entry is the only tracked
+  change. Nothing was merged, pushed, tagged, or published; the branch remains
+  local-only (`git ls-remote --heads origin` returns `refs/heads/main` alone).
+
+### Counts reconciled exactly, not just green
+
+- `yarn test` from a wiped `dist/` and `tsconfig.tsbuildinfo`:
+  **admin unit 48 files / 180 cases**, **client unit 29 files / 149 cases**,
+  **admin emulator 7 files / 21 cases**, **protocol 0 / 0** — every cell of the
+  task-file table hit on the nose.
+- Protocol reports zero because it declares no `test`/`test-unit`/`test-emulator`
+  script at all, so `workspaces foreach` has nothing to run there. That is the
+  intended shape (it ships types and constants only), not a runner miss.
+- Cross-checked statically against the sources: `grep -cE '^\s*(it|test)(\.each)?\('`
+  over the test files yields the same 149 / 180 / 21, so the runner is executing
+  every case the files declare.
+- Emulator suite ran under `firebase emulators:exec --project demo-admin-tests`;
+  the log line `Detected demo project ID "demo-admin-tests", emulated services
+  will use a demo configuration` is the evidence that no real project or
+  credential was reachable. No `GOOGLE_APPLICATION_CREDENTIALS` or service
+  account appears anywhere in the package, its `firebase.json`, or either vitest
+  config.
+
+### No test lost, skipped, or weakened
+
+- Test-file inventories are **identical** to
+  `/Users/eric/Code/okven/packages/firebase-kit-{client,admin}/src` — same paths,
+  same names, nothing dropped and nothing added (client 29; admin 48 + 7).
+- Per-file `it()` counts match Okven **file by file**; the comparison produced no
+  mismatches at all, so the totals are not masking a shuffle.
+- No `it.skip` / `test.skip` / `.todo` / `.only` / `xit` / `xdescribe` anywhere
+  under `packages/*/src`.
+- 21 files differ textually from Okven (11 client, 10 admin). Every diff was read
+  in full and every one is a lint-driven adaptation, never a weakened assertion:
+  named interfaces replacing `any` chains off untyped `vi.fn()` spies
+  (`createFirebaseAdmin{Firestore,Functions,Storage}Mock`), `${String(n)}` for
+  the restrict-template-expressions rule, `() => undefined` for `() => {}`,
+  `Query`/`DocumentReference` losing now-defaulted type arguments, `async` arrows
+  becoming `Promise.resolve(...)` where the callback awaited nothing, and
+  `expect(fn).toBeTypeOf('function')` becoming `expect(typeof fn).toBe('function')`.
+  The two structural ones are equivalent in strength: `assertNever` is now called
+  through a `vi.fn` spy and asserted with `toHaveReturnedWith(undefined)` because
+  a `void` call is not a consumable expression, and the exhaustive-`if` case
+  narrows through a `value is 'completed'` guard because the literal comparison
+  had become statically redundant.
+
+### Release-ready working tree
+
+- From wiped `dist/`: `yarn install --immutable` (lockfile untouched),
+  `yarn format` (**no-op** — `git status --porcelain` empty afterwards),
+  `yarn lint`, `yarn build`, `yarn test` including the emulator suite — all
+  exit 0.
+- `yarn pack --dry-run` in all three packages lists **zero** entries matching
+  `.test.`, `__test__`, or `__mocks__`.
+
+### Version and tag state
+
+- Root and all three packages read `0.0.1`.
+- `git ls-remote --tags origin` → `c4e916b… refs/tags/v0.0.1`, the only tag on
+  the remote, and `v0.0.1` is an ancestor of `origin/main`.
+- All three packages exist on npm at `0.0.1` with `latest = 0.0.1` (the bootstrap
+  placeholders), so the trusted publishers have packages to publish to.
+- Three commits sit on `origin/main` after the seed tag (`chore(deps-dev)`, the
+  dependabot merge, and `chore: pin typescript…`). All are non-releasable under
+  the default preset — the last push's `Package publishing` run
+  ([31429566384](https://github.com/ericvera/firebase-kit/actions/runs/31429566384))
+  is green with the changelog step skipped — so they neither trigger a bump nor
+  interfere with the squash commit's breaking-change footer.
+- `publish.yml`'s `Ensure the first release is 1.0.0` guard is present and reads
+  `steps.changelog.outputs.old_version`, aborting both when it is empty and when
+  it is `0.0.1` while the computed version is not `1.0.0` — before the version
+  bump, as designed.
+
+### `.mise/` state
+
+- Tracked on this branch: **19 files**. Tracked on `origin/main`: **0**. This is
+  the expected pre-close-out state; the mise close-out commit deletes `.mise/`
+  before the merge, and the workflow's unconditional guard would fail the run if
+  it did not.
+
+### Drafted release commit message (for the squash merge — not committed here)
+
+```
+feat: first public release of the firebase-kit packages
+
+Move firebase-kit-protocol, firebase-kit-client, and firebase-kit-admin out of
+their private monorepo into this public repository and prepare them to publish:
+source and tests carried over intact, every manifest audited against its actual
+imports, publication metadata and per-package licenses added, READMEs written
+from the source, and the whole tree verified by packing it into real consumer
+projects.
+
+BREAKING CHANGE: This is the initial public release of firebase-kit-protocol,
+firebase-kit-client, and firebase-kit-admin. It supersedes the 0.0.1 bootstrap
+placeholders, which were published only to reserve the package names and
+configure npm trusted publishing and contain no usable code. There is no
+upgrade path from 0.0.1 because it has no public API; 1.0.0 is the first
+release with one.
+```
+
+- The footer form is deliberate: a `!` suffix is not reliably detected by the
+  configured preset and would compute `0.1.0`. `BREAKING CHANGE:` starts a line
+  after a blank line, which is what the parser's `noteKeywords` requires.
+- This must be the **squash commit's** message. On a GitHub squash merge that
+  means the PR title and body, edited — the default body is the concatenation of
+  the branch's 53 commits and carries no footer.
+
+### Deviations from plan
+
+- **Steps 6–8 of the task file were deliberately not performed.** Per the
+  orchestrator, work stops at "verified and the message is drafted". No merge, no
+  push, no publish, and no workflow was watched. The merge to `main` is the
+  maintainer-authorized close-out.
+- The task file was read from `.mise/implementation_plan/03_04_release_readiness.md`;
+  it had **not** been moved into `done/` when this task ran.
+
+### Verification
+
+- End-to-end tests: none — both project test exceptions apply (library packages
+  with no e2e infrastructure; consumer-facing wiring). The substitute
+  verification is the exact count reconciliation above, the file-by-file Okven
+  comparison, the from-clean full gate run including the emulator suite, and the
+  three `yarn pack --dry-run` listings. The post-merge registry checks in the
+  task file's checklist remain open by design.
+- `git -C /Users/eric/Code/okven status --short` is empty; Okven was only read.
