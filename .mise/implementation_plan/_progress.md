@@ -1673,3 +1673,197 @@ re-verified against the code before editing, not taken from the review.
   **29/149** (client unit), **7/21** (emulator).
 - `git -C /Users/eric/Code/okven status --short` is empty — read only, for the
   `db-refs` ref-builder pattern the client fix follows.
+
+## 3.3 — Packed-consumer verification: all three tarballs installed and exercised outside the repo; one open defect found (strict-layout type resolution)
+
+- **No repository files changed.** The verification found one defect (below); it
+  is *not* fixed here, because every available fix is a decision that reverses a
+  recorded earlier one. Everything else passed. The only tracked change is this
+  progress entry.
+- The consumer projects and the tarballs lived in a scratch directory outside the
+  repository and were deleted at the end. No publish command of any kind was run.
+
+### Packing
+
+- Packed with **Yarn's** packer (`yarn workspace <name> pack --out …`), never
+  npm's. The direct check for that hazard, read out of the tarballs and again out
+  of the installed `node_modules`: `firebase-kit-client` and `firebase-kit-admin`
+  both declare `"firebase-kit-protocol": "0.0.1"` — a concrete range — and
+  **`grep -c 'workspace:'` over all three published manifests is 0**.
+- After the probe described under "the defect" below was reverted, all three
+  packages were **re-packed and the archives compared byte-for-byte** (`shasum`
+  of the extracted stream) against the tarballs every check above ran against:
+  identical. What was verified is what the tree currently produces.
+
+### The consumer projects — two of them, deliberately
+
+Two throwaway projects outside the repo, both `"type": "module"`, `engines.node
+>= 24`, tsconfig extending `@tsconfig/strictest` with `module` /
+`moduleResolution` `nodenext` and **`skipLibCheck: false`** (so the published
+`.d.ts` files are themselves type-checked, which is what surfaced the defect):
+
+1. **Hoisted** — npm install, all three tarballs plus every peer a real consumer
+   needs: `firebase`, `getsetdel@2`, `firebase-admin`, `firebase-functions`,
+   `betterbe`, `firestore-snapshot-utils`, `vitest`, and `fake-indexeddb` as a
+   devDependency. `npm ls --depth=0` reports no unmet peer.
+2. **Strict, non-hoisting** — pnpm 11 with `hoist: false`, `autoInstallPeers:
+   false`, so a package may resolve only what it declares. This is the layout a
+   pnpm or Yarn PnP consumer actually gets.
+
+**The `firebase-kit-protocol@0.0.1` placeholder trap is real and was hit.** The
+first strict install bound the *dependents* to the registry placeholder
+(`node_modules/.pnpm/firebase-kit-protocol@0.0.1/` — `README.md` and
+`package.json`, no `dist`) while the top-level link pointed at the tarball,
+because pnpm 11 no longer reads the `pnpm.overrides` key in `package.json`
+(it warns and ignores it; the setting moved to `pnpm-workspace.yaml`). Moving
+the override to `pnpm-workspace.yaml` left exactly one protocol in the store,
+`firebase-kit-protocol@file+tarballs+…tgz`, with real `dist/` output, linked from
+both dependents' private `node_modules`. Verified the same way in both projects
+before going further: the installed protocol carries `dist/{index,constants,
+types}.{js,d.ts}`, not the phase-1 placeholder's README alone.
+
+### All 18 entry points
+
+- **Hoisted: 18/18 resolve and type-check.** `tsc --noEmit` exits 0 over a file
+  importing every subpath (1 protocol + 7 client + 10 admin), and a bare `node`
+  process `import()`s all 18 successfully — including `firebase-kit-admin/mocks`,
+  the entry point the `files` exclusions could have deleted.
+- **Strict: 18/18 resolve at runtime; 15/18 type-check.** The three failures are
+  the defect below.
+- `--traceResolution` confirms resolution goes through the published `exports`
+  into the installed `dist/`, e.g. `'firebase-kit-client/firestore'` →
+  `node_modules/firebase-kit-client/dist/firestore/index.d.ts@0.0.1`, and
+  `'firebase-kit-protocol'` → `node_modules/firebase-kit-protocol/dist/index.d.ts
+  @0.0.1`. The harness was proved sensitive rather than merely green: an injected
+  `import { isDev } from 'firebase-kit-client/runtime'` fails `TS2305`.
+
+### README blocks — 30 of 30 executed, 0 type-checked only
+
+All 30 `typescript` blocks (3 protocol + 12 client + 15 admin) were extracted to
+the path in their header comment (**blocks missing a path header: 0**) into the
+hoisted consumer, compiled with `tsc` (exit 0), and then **run**. The task file
+expected the client and admin blocks to be type-checked rather than executed;
+with real peers installed they all executed instead.
+
+- **26 executed by a bare `node` process** importing each compiled module, which
+  runs its whole top-level body: `createInit`, `createFirestoreUtils` (both
+  packages), `createActionableFunctionCaller`, `createRateLimitedCaller`,
+  `onCall`/task builders, `object()` schemas, `createRequestBuilders`, and four of
+  the six `__mocks__` factories all construct successfully outside a test runner.
+  None of the client blocks needed IndexedDB or a DOM at module scope.
+- **4 executed under vitest**, because they can only run inside a vitest worker:
+  - `admin/src/__test__/setup/emulator.setup.ts` and
+    `admin/src/spaces/renameSpace.emulator.test.ts` were run **against a live
+    Firestore emulator** (`firebase emulators:exec --project demo-my-app --only
+    auth,firestore`) with the block's own setup file. The test **passed** and
+    vitest filled its empty `toMatchInlineSnapshot()` with a real masked diff
+    (`- "name": "Original"` / `+ "name": "Renamed"`, `updated` masked to
+    `"••••••••••••••••"`). This executes `registerEmulatorHooks`,
+    `getDBSnapshot`, `getDBChanges`, `getDBChangesDiff`, `runTransaction` and
+    `checkDocumentExists` end-to-end from the tarball.
+  - `client/src/__mocks__/getsetdel/index.ts` and
+    `admin/src/__mocks__/firebase-admin/firestore/index.ts` call
+    `vi.importActual`, which throws outside a worker. Imported from a harness
+    test instead; both shims built their mocks, and `vi.mock('firebase-admin/
+    firestore')` routed through the admin shim gave a working `getFirestore` and
+    a real `Timestamp`.
+- **Two harness files were added beside the blocks, and neither is a README
+  block** (both are marked as such in a header comment): a `beforeEach` that
+  seeds `spaces/space-1`, because the emulator example renames a document it does
+  not create and `registerEmulatorHooks` wipes the database before every test;
+  and the wrapper test for the two `vi.importActual` shims. Every README block
+  itself was run byte-for-byte as published.
+- "Executed" means the module body ran, not that every exported function was
+  called. The emulator block is the one that runs its own assertions.
+
+### The defect — published `.d.ts` reference two undeclared packages
+
+Under the **strict** layout, `tsc` reports **29 × TS2307**, every one of them
+inside a published declaration file and none in consumer code:
+
+| entry point | errors | missing module |
+| ----------- | ------ | -------------- |
+| `firebase-kit-client/firestore` | 9 | `@firebase/firestore`, `@firebase/firestore/lite` |
+| `firebase-kit-admin/mocks` | 19 | `@vitest/spy` |
+| `firebase-kit-client/testing` | 1 | `@vitest/spy` |
+
+The other 15 entry points are clean, and **all 18 still work at runtime** — the
+emitted JavaScript imports only declared specifiers (`firebase/*`,
+`firebase-admin/*`, `firebase-functions*`, `betterbe`, `getsetdel`,
+`firestore-snapshot-utils`, `vitest`, `firebase-kit-protocol`, `node:crypto`).
+This is purely type resolution, and it is invisible under npm/Yarn
+`node-modules` because both hoist `@firebase/*` and `@vitest/spy` to the top
+level as dependencies of the `firebase` and `vitest` peers.
+
+Cause is TypeScript declaration emit naming an inferred type by the file that
+*declares* it rather than the specifier the source imported:
+
+- `dist/firestore/createFirestoreUtils.d.ts` writes
+  `DBT extends import("@firebase/firestore/lite").DocumentData` because
+  `createFirestoreUtils` returns an inferred object literal and the outer file
+  has no import of `DocumentData` to reuse. `firebase/firestore/lite` re-exports
+  from `@firebase/firestore/lite`, so that is where the symbol is declared.
+  **`firebase-kit-client/firestore` is a production entry point** — this is the
+  one that would hit an application, not a test suite.
+- The `@vitest/spy` entries are all `import("vitest").Mock<import("@vitest/
+  spy").Procedure>` — the expanded default type argument of `Mock`, produced by
+  every untyped `vi.fn()`. `Procedure` is exported from `@vitest/spy` but is
+  **not** re-exported from `vitest`, so a strict-layout consumer cannot name it
+  at all.
+
+**Why it is not fixed here.** Both fixes reverse a decision recorded earlier in
+this plan, which is a call for the plan and not for a verification task:
+
+- *Firestore.* Adding type-only imports of `DocumentData`/`Firestore` to
+  `createFirestoreUtils.ts` **does** fix it — verified by building with them:
+  the emitted declaration switches to the local aliases and every
+  `@firebase/…` reference disappears, with a structurally identical type. But
+  the imports are used nowhere in the source, so `noUnusedLocals` rejects the
+  file (`TS6192: All imports in import declaration are unused`) and both
+  `yarn build` and `yarn lint` report it. Making them used means giving
+  `createFirestoreUtils` an explicit return type, which must be an **exported**
+  interface (a local one fails declaration emit with `TS4023`) — a new public
+  name on the client package's headline API. The probe was reverted; the tree is
+  unchanged and re-packs byte-identically.
+- *Vitest.* The only source-level fix is typing the `vi.fn()` calls, which is
+  exactly what the **2.3 review fix** reverted: it narrowed `./mocks`'s published
+  types and broke consumer calls such as
+  `storage.deleteMock.mockResolvedValue([{ status: 200 }])`. A local alias for
+  `Procedure` cannot be written either — its definition is
+  `(...args: any[]) => any` and `@typescript-eslint/no-explicit-any` forbids it.
+  Declaring `@vitest/spy` as a peer does not help: an unmet optional peer is
+  still not installed.
+
+**What a maintainer needs to decide** before or after `1.0.0`: accept the
+limitation (and say so in the READMEs — npm and Yarn consumers are unaffected,
+pnpm/PnP consumers need `publicHoistPattern` or an explicit
+`@firebase/firestore` + `@vitest/spy` devDependency), or take the surface change
+on `createFirestoreUtils` and revisit the 2.3 decision on the mock factories.
+
+### Deviations from plan
+
+- **The task file's split between "executed" and "type-checked" did not
+  materialise.** It expects the client blocks to need IndexedDB and the admin
+  blocks to need an emulator, and prescribes type-checking for those. With the
+  peers actually installed, every client block runs under plain Node, and the one
+  admin block that genuinely needs an emulator was run against one. Nothing was
+  left at type-check-only.
+- **The checklist item "any defect found was fixed … and re-verified against a
+  fresh pack" is not satisfied**, deliberately and with the reasoning above. The
+  defect is reported rather than fixed. Every other checklist item passed.
+- A second consumer project (the strict pnpm one) was added beyond the task
+  file's single project, on the orchestrator's instruction. It is what found the
+  defect; the hoisted project alone reports a uniform pass.
+
+### Verification
+
+- `yarn format` (working tree clean afterwards), `yarn lint`, `yarn build` and
+  `yarn test` all exit 0 after the probe was reverted. Counts unchanged:
+  **48/180** (admin unit) + **29/149** (client unit), **7/21** (emulator).
+- `git status --short` on this repository is empty apart from this entry;
+  `git -C /Users/eric/Code/okven status --short` is empty.
+- End-to-end tests: none — and this task **is** the substitute verification the
+  project's test exception prescribes for consumer-facing wiring. Its evidence is
+  the two packed consumer projects, the 18-entry-point resolution and type-check
+  in both layouts, the 30-of-30 README block execution record, and the live
+  emulator run above.
