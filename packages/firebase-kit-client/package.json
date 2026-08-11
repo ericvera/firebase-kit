@@ -23,7 +23,8 @@
     "./firestore": "./dist/firestore/index.js",
     "./rate-limit": "./dist/rate-limit/index.js",
     "./runtime": "./dist/runtime/index.js",
-    "./testing": "./dist/testing/index.js"
+    "./testing": "./dist/testing/index.js",
+    "./package.json": "./package.json"
   },
   "sideEffects": false,
   "engines": {

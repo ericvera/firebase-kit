@@ -13,7 +13,10 @@
   ],
   "license": "MIT",
   "type": "module",
-  "exports": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
   "sideEffects": false,
   "engines": {
     "node": ">=24"

@@ -54,7 +54,11 @@ export const createFirebaseAdminFunctionsMock = () => {
   // test its handling of failures the queue would otherwise never produce.
   let enqueueFailure: unknown
 
-  const enqueueMock = vi.fn()
+  // Annotated rather than left inferred: an inferred `vi.fn()` is
+  // `Mock<Procedure>`, and `Procedure` is declared in `@vitest/spy`, which
+  // `vitest` does not re-export — so declaration emit would name a module this
+  // package does not declare. `Mock` is `Mock<Procedure>`, so nothing narrows.
+  const enqueueMock: Mock = vi.fn()
 
   // Only the queue name carries a type, because the enqueue implementation
   // reads it back off this spy's last call and an untyped `vi.fn()` would make

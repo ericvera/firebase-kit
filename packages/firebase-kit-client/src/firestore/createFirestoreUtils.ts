@@ -10,6 +10,28 @@ import { createSubscribeWithCache } from './internal/subscribeWithCache.js'
 import type { FirestoreUtilsDependencies } from './types.js'
 
 /**
+ * The browser-side Firestore access layer `createFirestoreUtils` returns.
+ *
+ * Every member is written as `ReturnType<typeof …>` rather than spelled out,
+ * because declaration emit echoes that form verbatim and rewrites only the
+ * value reference to a relative specifier. Left inferred, the emitted
+ * signatures name `@firebase/firestore` and `@firebase/firestore/lite` — where
+ * the `firebase/firestore(/lite)` barrels re-export their symbols from, and
+ * which this package does not declare.
+ */
+export interface FirestoreUtils {
+  getDoc: ReturnType<typeof createGetDoc>
+  getDocWithCache: ReturnType<typeof createGetDocWithCache>
+  getDocs: ReturnType<typeof createGetDocs>
+  getDocsWithCache: ReturnType<typeof createGetDocsWithCache>
+  getDocsWithCursor: ReturnType<typeof createGetDocsWithCursor>
+  getHostingFirestore: ReturnType<typeof createGetHostingFirestore>
+  readThroughCache: typeof readThroughCache
+  subscribe: ReturnType<typeof createSubscribe>
+  subscribeWithCache: ReturnType<typeof createSubscribeWithCache>
+}
+
+/**
  * Entry point of the `./firestore` subpath. Called once per app — from the
  * app's own database barrel, which exports the result as `db` — and returns
  * the whole browser-side Firestore access layer bound to that app: the plain
@@ -23,7 +45,7 @@ import type { FirestoreUtilsDependencies } from './types.js'
  */
 export const createFirestoreUtils = (
   dependencies: FirestoreUtilsDependencies,
-) => ({
+): FirestoreUtils => ({
   getDoc: createGetDoc(dependencies),
   getDocWithCache: createGetDocWithCache(dependencies),
   getDocs: createGetDocs(dependencies),

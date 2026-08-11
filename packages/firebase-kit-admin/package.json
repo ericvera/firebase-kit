@@ -28,7 +28,8 @@
     "./runtime": "./dist/runtime/index.js",
     "./tasks": "./dist/tasks/index.js",
     "./testing": "./dist/testing/index.js",
-    "./validation": "./dist/validation/index.js"
+    "./validation": "./dist/validation/index.js",
+    "./package.json": "./package.json"
   },
   "sideEffects": false,
   "engines": {

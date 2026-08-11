@@ -1867,3 +1867,177 @@ on `createFirestoreUtils` and revisit the 2.3 decision on the mock factories.
   the two packed consumer projects, the 18-entry-point resolution and type-check
   in both layouts, the 30-of-30 README block execution record, and the live
   emulator run above.
+
+## 3.3 (fix) — The 56 undeclared-module references in the published `.d.ts` eliminated; `./package.json` subpath added to all three
+
+Out-of-plan fix authorised by the maintainer after the packaging audit, closing
+the open defect 3.3 reported. **Zero** references to `@firebase/*`,
+`@vitest/spy`, or any other module a package does not declare survive in any
+published declaration file, measured with the TypeScript compiler API rather
+than with a `tsc` error count — 27 of the 56 sat in lazily-checked nested
+type-argument positions and produced no error at all.
+
+- Key changes (on `feat/publish-firebase-kit-packages`) — 11 files:
+  - **`@vitest/spy`, 46 refs across 5 files.** Every one came from an untyped
+    `vi.fn()`, whose inferred type is `Mock<Procedure>`; `vitest` re-exports
+    `Mock` but not `Procedure`, so declaration emit had to name `@vitest/spy`.
+    A bare `: Mock` annotation is **type-identical** (`Procedure` is `Mock`'s
+    default type argument) and narrows nothing — deliberately not the
+    `vi.fn<Signature>()` form the 2.3 review reverted for breaking consumer
+    calls.
+    - `admin/src/mocks/createFirebaseAdminFunctionsMock.ts` — `enqueueMock: Mock`
+      (1).
+    - `client/src/testing/createFirebaseFunctionsClientMock.ts` —
+      `getFunctions: Mock`, plus `Mock` added to the existing `vitest` import
+      (1).
+    - `admin/src/mocks/createFirebaseFunctionsMock.ts` — the `logger` const
+      carries an inline object-type annotation with six `Mock` members, so the
+      emitted shape stays the same inline object literal (6).
+    - `admin/src/mocks/createFirebaseAdminStorageMock.ts` — all 12 `const
+      …Mock = vi.fn()` annotated; that covers 14 refs, two of them the same
+      `bucketMock` binding re-printed inside `getStorage`/`initializeStorage`
+      (14).
+    - `admin/src/mocks/createFirebaseAdminFirestoreMock.ts` — a **non-exported**
+      `MockFirestoreInstance` interface, annotated onto `const firestore`. The
+      12 spy members were printed twice (via `getFirestore` and
+      `initializeFirestore`), which is why one file held 24 of the 46. Non-
+      exported interfaces are already emitted into these files (`FileRecord`,
+      `TaskOptions`), so nothing new became public (24, all previously latent).
+  - **`@firebase/firestore*`, 10 refs across 2 files.**
+    - `client/src/firestore/internal/fetchDocs.ts` — `QuerySnapshot` added to the
+      existing `firebase/firestore/lite` type import and the return annotated
+      `Promise<QuerySnapshot<DBT, DBT>>` (1).
+    - `client/src/firestore/createFirestoreUtils.ts` — new **exported**
+      `FirestoreUtils` interface whose nine members are `ReturnType<typeof …>`
+      (`readThroughCache` is `typeof readThroughCache`), with
+      `createFirestoreUtils` annotated to return it. Declaration emit echoes
+      `ReturnType<typeof …>` verbatim and rewrites only the value reference to a
+      relative specifier, so no external specifier appears (9).
+  - **`"./package.json"` added to all three `exports` maps.** The protocol's
+    `exports` was the string form and became an object with `"."` and
+    `"./package.json"`.
+  - **`admin/src/firestore/createFirestoreUtils.ts`** emitted the *global*
+    `FirebaseFirestore.Firestore` / `FirebaseFirestore.WriteBatch`, which come
+    from `@google-cloud/firestore` — an undeclared transitive of `firebase-admin`
+    that only resolved because a sibling module imports `firebase-admin/
+    firestore`. `Firestore` and `WriteBatch` are now imported by name and written
+    onto local `getFirestore` / `runBatch` declarations, so the emit names
+    `firebase-admin/firestore` and is layout-independent.
+  - `packages/firebase-kit-client/README.md` — one API-reference bullet for the
+    new `FirestoreUtils` name.
+
+### Deviations from plan
+
+- **`createFirebaseFunctionsMock`'s logger uses an inline object-type annotation,
+  not a named interface.** The instruction said "annotate the 6 `logger`
+  members"; a named interface would have changed the emitted shape from an
+  inline object literal to a type reference, which the surface-diff criterion
+  ("the only differences should be the specifier rewrites, the new
+  `FirestoreUtils`, and the new internal mock interface" — singular) rules out.
+  Inline keeps the emitted `logger: { write: Mock; … }` byte-shape.
+- **One README line was added** beyond the nine listed items, naming
+  `FirestoreUtils` in the client's API reference. A new public export on the
+  headline API of a `1.0.0` package should not ship undocumented; it changes no
+  code block and no verification.
+- `@vitest/spy` was the only undeclared *module*; the `FirebaseFirestore.*`
+  globals are not module specifiers and are unaffected by hoisting, but item 9
+  removed the two in the published `firestore/createFirestoreUtils.d.ts` anyway.
+  **Two occurrences remain and were deliberately left**:
+  `mocks/createFirebaseAdminFirestoreMock.d.ts` prints `typeof
+  FirebaseFirestore.FieldPath` / `Timestamp` for the pass-through `actual`
+  members. They are pre-existing, out of the fix's stated scope, and typecheck
+  cleanly under the strict layout (the global namespace is in scope wherever
+  `firebase-admin` is installed, which is a required peer).
+
+### Verification
+
+- **The measurement instrument is the TypeScript compiler API, not `grep` and
+  not `tsc`.** A scanner walks every `.d.ts` in each tarball and collects every
+  module specifier from import/export declarations, `import(...)` type nodes,
+  `import =` external module references, and triple-slash `path`/`types`
+  references. Run against the three **Yarn-packed** tarballs in a scratch
+  directory outside the repo:
+  - Before: `46 @vitest/spy`, `10 @firebase/firestore(/lite)` — **56**.
+  - After: **0** of either. The remaining 74 bare references are exactly
+    `betterbe`, `firebase`, `firebase-admin`, `firebase-functions`,
+    `firebase-kit-protocol`, `firestore-snapshot-utils`, `getsetdel` and
+    `vitest`, and each appears only in a package that declares it — protocol 0,
+    client `firebase`/`getsetdel`/`vitest`, admin the rest.
+- **Strict non-hoisting consumer, `skipLibCheck: false`.** Yarn 4 with
+  `nodeLinker: pnpm` (no hoisting at all: `node_modules/.store/firebase-kit-
+  client-virtual-*/node_modules` holds only `firebase`, `firebase-kit-protocol`,
+  `getsetdel`, `vitest`), all three tarballs plus every declared peer, tsconfig
+  extending `@tsconfig/strictest` at `module`/`moduleResolution` `nodenext`.
+  - **`tsc --noEmit` over all 18 entry points exits 0** (was 29 × `TS2307`).
+  - The protocol-placeholder trap was avoided by a Yarn `resolutions` entry
+    pinning `firebase-kit-protocol` to the tarball; both dependents resolve to
+    `node_modules/.store/firebase-kit-protocol-file-*/package`, which carries
+    real `dist/{index,constants,types}.{js,d.ts}` and not the registry
+    placeholder's README.
+  - **The harness was proved sensitive, not merely green**: copying the two
+    pre-fix declaration files back over the installed package reproduces **21 ×
+    `TS2307`** naming `@vitest/spy` and `@firebase/firestore(/lite)`; restoring
+    them returns to 0.
+  - A bare `node` process imports all 18 entry points successfully.
+- **Full `.d.ts` surface diff against the pristine pre-fix build.** Same file
+  lists on both sides, no file added or removed; **9 files differ**, every
+  difference accounted for:
+  - specifier rewrites only (`@vitest/spy` → `Mock`, `@firebase/…` →
+    `firebase/firestore/lite`, `FirebaseFirestore.*` → `firebase-admin/
+    firestore`) in `client/testing/createFirebaseFunctionsClientMock`,
+    `client/firestore/internal/fetchDocs`, `admin/firestore/createFirestoreUtils`,
+    `admin/mocks/createFirebaseAdmin{Functions,Storage}Mock`,
+    `admin/mocks/createFirebaseFunctionsMock`, and the two **unpublished**
+    `__mocks__` barrels;
+  - the new exported `FirestoreUtils` in `client/firestore/createFirestoreUtils`;
+  - the new non-exported `MockFirestoreInstance` in
+    `admin/mocks/createFirebaseAdminFirestoreMock`.
+- **`./mocks` did not narrow — proved from a consumer, not by reading.** The
+  three calls the 2.3 review cited as broken by the reverted approach compile
+  against the tarball: `storage.deleteMock.mockResolvedValue([{ status: 200 }])`,
+  `fs.doc.mockImplementation((path: string) => ({ path }))`, and
+  `storage.bucketMock.mockReturnValue({ name: 'my-bucket' })` — plus
+  `getMetadataMock.mockResolvedValue`, `saveMock.mockImplementation` with a
+  different signature, `fileMock.mockReturnValue`, `collection.mockReturnValue`,
+  `batch.mockReturnValue`, `enqueueMock.mockResolvedValue`/`mockImplementation`,
+  the client mock's `getFunctions.mockReturnValue`, and two logger members. The
+  probe was proved sensitive by a `TS2339` on an invented member.
+- **`FirestoreUtils` is reachable and correct from a consumer**: imported by name
+  from `firebase-kit-client/firestore`, used as the annotation on the factory's
+  result, and `db.getDoc<{ name: string }>({ id, getRef })` still infers
+  `GetDocOptions<{ name: string }>` — the generics survive the
+  `ReturnType<typeof …>` formulation.
+- **`./package.json` is load-bearing, verified by removing it**: deleting the
+  subpath from the installed protocol manifest makes
+  `require.resolve('firebase-kit-protocol/package.json')` fail with
+  `ERR_PACKAGE_PATH_NOT_EXPORTED`; restored, it resolves. All three resolve and
+  read back `name`/`version` in the strict consumer.
+- **`@arethetypeswrong/cli@latest` re-run on each tarball**: the only findings
+  are still `NoResolution`@node10 and `CJSResolvesToESM`@node16-cjs, on the same
+  rows as before. The new `"<pkg>/package.json"` row is 🟢 (JSON) in all four
+  resolution modes.
+- **All 30 README blocks still type-check** against the freshly packed tarballs
+  (3 protocol / 12 client / 15 admin, **0 missing a path header**), in a hoisted
+  Yarn consumer with every peer plus `fake-indexeddb` and `scdate-testing`,
+  `skipLibCheck: false`. Proved sensitive: an injected
+  `export const probe: number = createFirestoreUtils` fails with `TS2322` naming
+  the new `(dependencies: FirestoreUtilsDependencies) => FirestoreUtils`.
+- `yarn install --immutable` (lockfile untouched — no dependency added or
+  moved), `yarn format` (working tree clean afterwards), `yarn lint`,
+  `yarn build` and `yarn test` all exit 0. **Counts unchanged**: 48/180 (admin
+  unit) + 29/149 (client unit), 7/21 (emulator). No test deleted, skipped or
+  weakened.
+- No dependency added, no `eslint-disable`, no `@ts-ignore`/`@ts-expect-error`
+  (the single hit across `packages/*/src` is Okven's pre-existing one in
+  `internal/assertNever.test.ts`), no new type assertion, no rule disabled or
+  downgraded.
+- Pack listings unchanged from 3.1 — 9 / 97 / 151 entries — with no `__test__`,
+  no `__mocks__`, no `*.test.*` and no `src/` in any of them.
+- `git -C /Users/eric/Code/okven status --short` is empty. Every scratch
+  directory, tarball and consumer project lived outside the repository and was
+  deleted; no publish command of any kind was run.
+- End-to-end tests: none — the project's test exception for consumer-facing
+  wiring applies. The substitute verification is the compiler-API scan of the
+  packed tarballs, the strict non-hoisting consumer with its sensitivity probe,
+  the whole-surface `.d.ts` diff, the `./mocks` consumer probe, and the 30-block
+  README re-check above.

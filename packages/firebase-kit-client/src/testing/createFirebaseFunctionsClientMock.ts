@@ -1,6 +1,6 @@
 import { FirebaseError } from 'firebase/app'
 import type { HttpsCallableStreamResult } from 'firebase/functions'
-import { vi } from 'vitest'
+import { type Mock, vi } from 'vitest'
 
 /**
  * Builds the stand-in a test suite re-exports from its
@@ -11,7 +11,11 @@ import { vi } from 'vitest'
  * their error paths.
  */
 export const createFirebaseFunctionsClientMock = () => {
-  const getFunctions = vi.fn()
+  // Annotated rather than left inferred: an inferred `vi.fn()` is
+  // `Mock<Procedure>`, and `Procedure` is declared in `@vitest/spy`, which
+  // `vitest` does not re-export — so declaration emit would name a module this
+  // package does not declare. `Mock` is `Mock<Procedure>`, so nothing narrows.
+  const getFunctions: Mock = vi.fn()
 
   // Mock implementation for httpsCallable
   const createCallableMock = <

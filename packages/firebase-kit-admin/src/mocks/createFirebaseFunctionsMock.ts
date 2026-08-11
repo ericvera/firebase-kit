@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { type Mock, vi } from 'vitest'
 import type { FirebaseFunctionsMockOptions } from './types.js'
 
 /**
@@ -12,7 +12,19 @@ export const createFirebaseFunctionsMock = ({
 }: FirebaseFunctionsMockOptions) => {
   // NOTE: Mock the logger as it calls console.error which causes problems with
   // tests
-  const logger = {
+  //
+  // Each member is annotated rather than left inferred: an inferred `vi.fn()`
+  // is `Mock<Procedure>`, and `Procedure` is declared in `@vitest/spy`, which
+  // `vitest` does not re-export — so declaration emit would name a module this
+  // package does not declare. `Mock` is `Mock<Procedure>`, so nothing narrows.
+  const logger: {
+    write: Mock
+    debug: Mock
+    error: Mock
+    info: Mock
+    log: Mock
+    warn: Mock
+  } = {
     write: vi.fn(),
     debug: vi.fn(),
     error: vi.fn(),

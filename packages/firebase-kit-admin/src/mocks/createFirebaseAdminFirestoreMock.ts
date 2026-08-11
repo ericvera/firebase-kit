@@ -1,5 +1,28 @@
-import { vi } from 'vitest'
+import { type Mock, vi } from 'vitest'
 import type { FirebaseAdminFirestoreMockOptions } from './types.js'
+
+/**
+ * The faked Firestore instance `getFirestore` / `initializeFirestore` hand
+ * back. Named rather than left inferred: an inferred `vi.fn()` is
+ * `Mock<Procedure>`, and `Procedure` is declared in `@vitest/spy`, which
+ * `vitest` does not re-export — so declaration emit would name a module this
+ * package does not declare. `Mock` is `Mock<Procedure>`, so nothing narrows.
+ */
+interface MockFirestoreInstance {
+  databaseId: string
+  doc: Mock
+  collection: Mock
+  settings: Mock
+  collectionGroup: Mock
+  getAll: Mock
+  recursiveDelete: Mock
+  terminate: Mock
+  listCollections: Mock
+  runTransaction: Mock
+  batch: Mock
+  bulkWriter: Mock
+  bundle: Mock
+}
 
 /**
  * Builds the stand-in a test suite re-exports from its
@@ -49,7 +72,7 @@ export const createFirebaseAdminFirestoreMock = ({
   })
 
   // Create the Firestore instance
-  const firestore = {
+  const firestore: MockFirestoreInstance = {
     databaseId,
     doc,
     collection,

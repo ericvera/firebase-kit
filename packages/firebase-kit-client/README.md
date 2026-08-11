@@ -558,6 +558,8 @@ real modules do not declare them.
 - **`createFirestoreUtils(dependencies)`**: Returns `getDoc`, `getDocWithCache`,
   `getDocs`, `getDocsWithCache`, `getDocsWithCursor`, `getHostingFirestore`,
   `readThroughCache`, `subscribe` and `subscribeWithCache`, all bound.
+- **`FirestoreUtils`**: The type of that return value, so a module that receives
+  the bound layer can name it in a signature.
 - **`reviveTimestamps(value, variant)`**: Rebuilds `Timestamp` instances from
   plain `{ seconds, nanoseconds }` (or callable-style `_seconds` /
   `_nanoseconds`) objects, walking objects and arrays to any depth.

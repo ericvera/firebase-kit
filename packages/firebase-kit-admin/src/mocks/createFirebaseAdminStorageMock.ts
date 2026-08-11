@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { type Mock, vi } from 'vitest'
 
 /** One file held by the in-memory bucket. */
 interface FileRecord {
@@ -25,18 +25,22 @@ export const createFirebaseAdminStorageMock = () => {
   // below reads the path the last `file()` call named.
   let currentFilePath: string | undefined
 
-  const bucketMock = vi.fn()
-  const getFilesMock = vi.fn()
-  const createMock = vi.fn()
-  const fileMock = vi.fn()
-  const downloadMock = vi.fn()
-  const uploadMock = vi.fn()
-  const saveMock = vi.fn()
-  const deleteMock = vi.fn()
-  const existsMock = vi.fn()
-  const getMetadataMock = vi.fn()
-  const makePublicMock = vi.fn()
-  const makePrivateMock = vi.fn()
+  // Each spy is annotated rather than left inferred: an inferred `vi.fn()` is
+  // `Mock<Procedure>`, and `Procedure` is declared in `@vitest/spy`, which
+  // `vitest` does not re-export — so declaration emit would name a module this
+  // package does not declare. `Mock` is `Mock<Procedure>`, so nothing narrows.
+  const bucketMock: Mock = vi.fn()
+  const getFilesMock: Mock = vi.fn()
+  const createMock: Mock = vi.fn()
+  const fileMock: Mock = vi.fn()
+  const downloadMock: Mock = vi.fn()
+  const uploadMock: Mock = vi.fn()
+  const saveMock: Mock = vi.fn()
+  const deleteMock: Mock = vi.fn()
+  const existsMock: Mock = vi.fn()
+  const getMetadataMock: Mock = vi.fn()
+  const makePublicMock: Mock = vi.fn()
+  const makePrivateMock: Mock = vi.fn()
 
   const storage = {
     bucket: bucketMock,

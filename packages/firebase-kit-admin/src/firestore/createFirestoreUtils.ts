@@ -1,3 +1,4 @@
+import type { Firestore, WriteBatch } from 'firebase-admin/firestore'
 import { createCollectionDataPoint } from './internal/createCollectionDataPoint.js'
 import { createGetFirestore } from './internal/createGetFirestore.js'
 import { createNestedSubCollectionDataPoint } from './internal/createNestedSubCollectionDataPoint.js'
@@ -24,7 +25,16 @@ export const createFirestoreUtils = <
 >(
   options: FirestoreUtilsOptions,
 ) => {
-  const getFirestore = createGetFirestore(options)
+  // `Firestore` and `WriteBatch` are imported by name and written out here
+  // rather than left inferred, so declaration emit reuses this file's
+  // `firebase-admin/firestore` specifier. Left inferred it prints the global
+  // `FirebaseFirestore.*` names, which come from `@google-cloud/firestore` — an
+  // undeclared transitive of `firebase-admin`.
+  const getFirestore: () => Firestore = createGetFirestore(options)
+
+  const runBatch: <T = void>(
+    callback: (batch: WriteBatch) => T | Promise<T>,
+  ) => Promise<T> = createRunBatch(getFirestore)
 
   return {
     getFirestore,
@@ -37,7 +47,7 @@ export const createFirestoreUtils = <
       TCollection,
       TSubCollection
     >(getFirestore),
-    runBatch: createRunBatch(getFirestore),
+    runBatch,
     runTransaction: createRunTransaction(getFirestore),
   }
 }
