@@ -23,9 +23,10 @@ neither side's call sites carry configuration.
 
 ## Features
 
-- **Reads and writes kept apart**: `runTransaction` hands the callback a reader
-  and a writer, which is what enforces Firestore's all-reads-before-any-writes
-  rule instead of leaving it to review
+- **Reads and writes kept apart**: `runTransaction` hands the callback a
+  separate reader and writer, so which half of a transaction a function is
+  allowed to touch is a type rather than a convention — Firestore's
+  all-reads-before-any-writes ordering is still the caller's to keep
 - **Collection names checked at compile time**: The ref builders take the app's
   collection enums as type arguments, so a query naming a collection the app does
   not have fails to compile
@@ -33,8 +34,10 @@ neither side's call sites carry configuration.
   API version is missing, too old, or newer than the server's; another rejects a
   token whose claims version has drifted, which is the signal a client uses to
   force a refresh
-- **Errors that log themselves**: The `internal` and `permission-denied` classes
-  log with the caller's uid so they can raise an alarm; the expected ones do not
+- **Errors that log themselves**: The `internal`, `permission-denied` and
+  `invalid-argument` classes log with the caller's uid so they can raise an
+  alarm; `unauthenticated` and `failed-precondition` are expected outcomes and
+  stay quiet
 - **Enqueueing that tolerates a retry**: A task id already scheduled is a
   duplicate of pending work, so it is logged and swallowed rather than raised
 - **Emulator testing in one line**: `registerEmulatorHooks` initializes the app
@@ -228,7 +231,13 @@ export const spaceRefs = {
 
 `runTransaction` hands the callback a `TransactionReader` and a
 `TransactionWriter` rather than a raw `Transaction`. Neither wrapper exposes the
-other's operations, so a write placed before a read cannot compile.
+other's operations, so a helper handed the reader cannot write and a helper
+handed the writer cannot read. That is a split of capability, not of ordering:
+both wrappers are live from the callback's first line, so a write placed before a
+read still compiles and still fails at runtime with Firestore's
+all-reads-before-any-writes error. What the split buys is that the order is
+legible — you can see which calls are the read phase — and that a function taking
+only a `TransactionWriter` cannot quietly add a read later.
 `checkDocumentExists` reads through either the reader or the ref itself and
 throws `internal` when the document is missing.
 
@@ -248,7 +257,8 @@ export const renameSpace = (
   db.runTransaction(async (reader, writer) => {
     const ref = spaceRefs.doc(spaceId)
 
-    // All reads first — the writer is not usable until this resolves.
+    // All reads first: Firestore rejects a transaction that reads after a
+    // write, and nothing but this ordering prevents it.
     const space = await checkDocumentExists<DBSpace & { id: string }, DBSpace>(
       ref,
       auth,
@@ -397,7 +407,9 @@ export const spaces = onCall<SpacesRequest, Promise<{ result: 'success' }>>(
     const { authData } = checkAuthenticated(auth)
     const claims = await checkClaimsVersion<AppClaims>(authData)
 
-    if (claims.role !== 'owner') {
+    // Optional chaining, not decoration: a user who has never had custom
+    // claims written has none, and that is what comes back.
+    if (claims?.role !== 'owner') {
       throw new FunctionsPermissionDeniedError(authData, 'Owner role required')
     }
 
@@ -624,7 +636,9 @@ from `process.env`) follow the same shape.
   `FunctionsUnauthenticatedError`.
 - **`checkClaimsVersion<TClaims>(auth)`**: Loads the caller's stored claims and
   throws `FunctionsPermissionDeniedError` on any version mismatch, or
-  `FunctionsInternalError` when the request carries no uid.
+  `FunctionsInternalError` when the request carries no uid. It returns the
+  record as stored, typed `TClaims` — a user who has never had custom claims
+  written has none, so read the result defensively.
 
 ### `firebase-kit-admin/callable`
 

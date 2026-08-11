@@ -25,8 +25,9 @@ This monorepo contains the following packages:
   `action` field, with per-action rate limits and API version floors
 - 📴 **Offline aware** — connectivity failures surface as a single error type, so
   cached reads can be served instead of a blank page
-- 🔒 **Reads and writes kept apart** — a transaction hands back a reader and a
-  writer, which is what enforces all-reads-before-any-writes
+- 🔒 **Reads and writes kept apart** — a transaction hands back a separate
+  reader and writer, so the read phase and the write phase are legible in the
+  code instead of left to review
 - 🧪 **Test doubles shipped with the code** — in-memory stand-ins for the
   Firebase SDKs, plus emulator hooks that keep concurrent test files apart
 - ✅ **Full TypeScript support** — ESM only, no CommonJS build

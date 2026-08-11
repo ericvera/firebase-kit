@@ -14,10 +14,14 @@ callable group with the response type inferred from the action, deciding whether
 a failed read means "offline" or "broken", serving a cached copy while the
 network is down, and catching a runaway loop before it spends a quota.
 
-Nothing here reaches for a global. Every host coupling — the error factory, the
-connectivity probe, the rate-limit budget, the database id — is passed in once
-when the layer is bound, so the same package works under a framework that owns
-those things and under one that does not.
+Almost nothing here reaches for a global. Every host coupling — the error
+factory, the connectivity probe, the rate-limit budget, the database id — is
+passed in once when the layer is bound, so the same package works under a
+framework that owns those things and under one that does not. The exception is
+the Firebase app itself on the Firestore side: `getHostingFirestore` resolves it
+with `getApp()`, so `firebase-kit-client/firestore` always reads through the
+default app. The callable layer has no such constraint — it takes a
+`firebaseApp` (or a pre-built `functions`) in its dependencies.
 
 ## Features
 
@@ -64,7 +68,9 @@ npm install firebase 'getsetdel@^2.0.0'
 project already on v3 will hit a peer-resolution conflict when it adds this
 package. That is deliberate rather than an oversight: this package is pinned to
 the v2 API, and the range will move when it is ported. Until then, a project on
-`getsetdel` 3 has to come back to 2 to use `firebase-kit-client/firestore`.
+`getsetdel` 3 has to come back to 2 to install this package at all: the peer is
+required, not optional, so the conflict fires at install time no matter which
+entry points you go on to import.
 
 **Optional**
 
@@ -343,15 +349,18 @@ what makes a direct read degrade exactly like a callable response.
 // src/firebase/db.ts
 import { createFirestoreUtils } from 'firebase-kit-client/firestore'
 import { callWithConnectivity } from './connectivity.js'
+import { isDev } from './hosting.js'
 
 /** Bumping this invalidates every cached collection at once. */
 const CacheVersion = 1
 
 export const db = createFirestoreUtils({
-  // undefined reads the project's default database.
-  databaseId: () => undefined,
-  // A test run forces the full SDK, because the emulator harness only wires
-  // that one up.
+  // The app's named database in production; undefined — the project default —
+  // everywhere else. Called per read, since a server render and a browser
+  // render of the same build answer differently.
+  databaseId: () => (isDev() ? undefined : 'app-database'),
+  // Lite-variant reads go through the lite SDK. Return true instead from a
+  // test run whose emulator harness only wires up the full one.
   useFullSDK: () => false,
   withConnectivityHandling: callWithConnectivity,
   createLogger: (name) => ({
@@ -364,23 +373,40 @@ export const db = createFirestoreUtils({
 ```
 
 The reads then take a ref or query builder and hand back documents with their id
-attached. Cached reads persist through `getsetdel` and are served stale while the
-connection is degraded rather than failing:
+attached. Build those refs on `db.getHostingFirestore` rather than on a bare
+`getFirestore()` from the SDK: it is the only thing that applies the `databaseId`
+and `useFullSDK` bound above, so a ref built any other way silently reads the
+project's default database through whichever SDK you happened to import. Cached
+reads persist through `getsetdel` and are served stale while the connection is
+degraded rather than failing:
 
 ```typescript
 // src/spaces/spaceReads.ts
-import { doc, getFirestore } from 'firebase/firestore/lite'
-import type { DocumentReference } from 'firebase/firestore/lite'
+import { FirestoreVariant } from 'firebase-kit-client/firestore'
+import { doc } from 'firebase/firestore/lite'
+import type {
+  DocumentReference,
+  Firestore as FirestoreLite,
+} from 'firebase/firestore/lite'
 import { db } from '../firebase/db.js'
 
 interface SpaceDoc {
   name: string
 }
 
-const spaceRef = (id: string): Promise<DocumentReference<SpaceDoc, SpaceDoc>> =>
-  Promise.resolve(
-    doc(getFirestore(), 'spaces', id) as DocumentReference<SpaceDoc, SpaceDoc>,
-  )
+/**
+ * `getHostingFirestore` returns `Firestore | FirestoreLite` — it is the caller
+ * that knows which variant it asked for, so narrow it here.
+ */
+const spaceRef = async (
+  id: string,
+): Promise<DocumentReference<SpaceDoc, SpaceDoc>> => {
+  const firestore = (await db.getHostingFirestore(
+    FirestoreVariant.FirestoreLite,
+  )) as FirestoreLite
+
+  return doc(firestore, 'spaces', id) as DocumentReference<SpaceDoc, SpaceDoc>
+}
 
 /** Straight through. A connectivity failure throws ConnectivityError. */
 export const getSpace = (spaceId: string) =>

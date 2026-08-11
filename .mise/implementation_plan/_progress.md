@@ -1578,3 +1578,98 @@ and failed on any violation):
   wiring applies. The substitute verification is the extract-and-type-check run
   above; task 3.3 repeats it against real packed tarballs in a project that
   installs the peers itself, which is the part this task could not cover.
+
+## 3.2 (review fix) — Seven prose defects corrected against the source; blocks re-extracted and re-type-checked
+
+Documentation only — three files (`README.md`,
+`packages/firebase-kit-client/README.md`,
+`packages/firebase-kit-admin/README.md`). No source changed. Every claim was
+re-verified against the code before editing, not taken from the review.
+
+- **A false compile-time guarantee about transactions (3 places).** The admin
+  README said "a write placed before a read cannot compile", the Features bullet
+  said the reader/writer split "is what enforces" the all-reads-before-any-writes
+  rule, and the root README said the same. Nothing encodes ordering:
+  `firestore/internal/createRunTransaction.ts:21-25` constructs both wrappers and
+  hands them to the callback together, so `writer.update(ref, …)` before
+  `reader.get(ref)` type-checks and fails at runtime. The library's own
+  docstrings are careful — `createRunTransaction.ts:11` says "enforcing the
+  *pattern*", `TransactionWriter.ts:15-16` says "use this wrapper only *after*
+  all read operations have been completed". All three now describe capability
+  separation (a helper handed the writer cannot read) and say explicitly that
+  ordering is the caller's and fails at runtime. The inline comment in the
+  `renameSpace` block ("the writer is not usable until this resolves" — it is
+  usable immediately) was corrected with them.
+- **The client's `spaceReads.ts` example bypassed `getHostingFirestore`.** It
+  built refs with `doc(getFirestore(), …)` imported straight from
+  `firebase/firestore/lite`, discarding the `databaseId` and `useFullSDK` the
+  `db.ts` block configures 20 lines earlier —
+  `firestore/internal/getHostingFirestore.ts:20-34` is what honours them, and
+  `createFirestoreUtils` returns it. The ref builder now goes through
+  `db.getHostingFirestore(FirestoreVariant.FirestoreLite)`, matching how the real
+  consumer (`okven/hosting/utils/db-refs/*`) does it, with prose above the block
+  saying why a bare `getFirestore()` silently reads the project default.
+  `db.ts`'s `databaseId` was changed from the constant `() => undefined` to
+  `() => (isDev() ? undefined : 'app-database')` so the mistake is visible rather
+  than invisible in the example's own configuration.
+- **A comment contradicting its code.** "A test run forces the full SDK…" sat
+  above `useFullSDK: () => false` (it had been lifted from the option's docstring
+  in `firestore/types.ts:276-280`). Reworded to describe what the value does and
+  when a consumer would return `true` instead.
+- **The Features bullet on error logging was wrong.** It named `internal` and
+  `permission-denied` as the logging classes and said "the expected ones do not",
+  but `FunctionsInvalidArgumentError.ts:7` passes `shouldLogError: true`. The
+  bullet now lists all three loggers and names `unauthenticated` and
+  `failed-precondition` as the quiet ones, matching the Usage prose and the API
+  reference, which were already right.
+- **The `getsetdel` conflict scope was understated.** The closing sentence said a
+  v3 project must come back to v2 "to use `firebase-kit-client/firestore`".
+  `getsetdel` is a required peer (`peerDependenciesMeta` marks only `vitest`
+  optional), so ERESOLVE fires at install for every consumer on v3 regardless of
+  which subpath they import. Reworded to say so.
+- **`checkClaimsVersion` example dereferenced a possibly-undefined claims
+  object.** `checkClaimsVersion.ts:36` returns `user.customClaims as TClaims`,
+  which is `undefined` for a user who has never had claims written — and such a
+  user passes the version check, since `auth.token['v']` and
+  `user.customClaims?.['v']` are then both `undefined`. The example now uses
+  `claims?.role`, and the API reference entry says the record comes back as
+  stored.
+- **"Nothing here reaches for a global"** was contradicted by
+  `getHostingFirestore.ts:17-18`, which calls `getApp()` unconditionally;
+  `FirestoreUtilsDependencies` has no `firebaseApp` member, so the Firestore
+  layer can only use the default app. The Overview now states the exception and
+  contrasts it with the callable layer, which does take `firebaseApp` /
+  `functions` (`callable/types.ts:42,47`).
+
+### Deviations from plan
+
+- None. Task 3.2's checklist items are all still satisfied; these are corrections
+  to prose within them. One change goes slightly beyond the reported defect: the
+  client `db.ts` example's `databaseId` was made conditional rather than a
+  constant `undefined`, because with a constant the `getHostingFirestore` point
+  the fix exists to make has no observable consequence in the example.
+
+### Verification
+
+- **Block extraction and type-check re-run in full**, the same substitute
+  verification 3.2 used: every `typescript` block extracted to the path in its
+  header comment into three throwaway consumer projects outside the repo, each
+  with `node_modules` symlinks to the three workspace packages and to every peer,
+  `"type": "module"`, and a tsconfig extending `@tsconfig/strictest` at
+  `module`/`moduleResolution` `NodeNext`. **`tsc --noEmit` exits 0 for all
+  three.** Counts unchanged: 3 blocks (protocol), 12 (client), 15 (admin);
+  **blocks missing a path header: 0**.
+  - Resolution confirmed to go through the published `exports` into `dist/`, not
+    into `src/`: `--traceResolution` reports
+    `'firebase-kit-client/firestore'` → `dist/firestore/index.d.ts@0.0.1`.
+  - Harness proved sensitive rather than merely green — an injected
+    `export const probe: number = db.getHostingFirestore` fails with `TS2322`
+    naming the real bound signature `(variant: FirestoreVariant) => Promise<…>`,
+    and removing it restores exit 0.
+  - Re-extracted and re-checked **after** `yarn format`, so what is committed is
+    what compiles.
+- `yarn format` (all four READMEs unchanged on re-run), `yarn lint`, `yarn build`
+  and `yarn test` all exit 0. Test counts unchanged: **48/180** (admin unit),
+  **29/149** (client unit), **7/21** (emulator).
+- `git -C /Users/eric/Code/okven status --short` is empty — read only, for the
+  `db-refs` ref-builder pattern the client fix follows.
