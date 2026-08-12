@@ -12,12 +12,15 @@
   },
   "scripts": {
     "format": "prettier --write .",
-    "lint": "eslint .",
-    "-- STUBS: no packages exist yet; replace when the first package lands --": "",
-    "build": "echo 'No packages yet - nothing to build'",
-    "test": "echo 'No packages yet - nothing to test'",
-    "test:unit": "echo 'No packages yet - no unit tests to run'",
-    "test:emulator": "echo 'No packages yet - no emulator tests to run'",
+    "-- LINT: builds first, so typed linting can resolve a package's dependency on another package's `dist` on a clean checkout --": "",
+    "lint": "yarn build && eslint .",
+    "-- LINT-CHANGED: what lint-staged runs; same build-first reason, and lint-staged appends the staged files to it --": "",
+    "lint-changed": "yarn build && eslint --cache",
+    "build": "tsc --build",
+    "-- TESTS: one runner invocation per package; package script names must stay colon-free (Yarn treats a colon script defined by exactly one workspace as global, so foreach would run it once per workspace) --": "",
+    "test": "yarn test:unit && yarn test:emulator",
+    "test:unit": "yarn build && yarn workspaces foreach --all --exclude @firebase-kit/monorepo run test-unit",
+    "test:emulator": "yarn build && yarn workspaces foreach --all --exclude @firebase-kit/monorepo run test-emulator",
     "-- PRE-COMMIT HOOKS --": "",
     "localAfterInstall": "husky || true"
   },
@@ -45,7 +48,7 @@
   },
   "license": "MIT",
   "lint-staged": {
-    "*.{ts,tsx,mjs}": "eslint --cache",
+    "*.{ts,tsx,mjs}": "yarn lint-changed",
     "*": "prettier --ignore-unknown --write"
   },
   "packageManager": "yarn@4.18.0"

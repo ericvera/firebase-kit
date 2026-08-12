@@ -3,5 +3,9 @@
 
   "files": [],
   "include": [],
-  "references": []
+  "references": [
+    { "path": "./packages/firebase-kit-protocol" },
+    { "path": "./packages/firebase-kit-client" },
+    { "path": "./packages/firebase-kit-admin" }
+  ]
 }

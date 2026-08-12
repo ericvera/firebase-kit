@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// The emulator-backed tests exercise the Admin SDK, which bypasses rules
+// entirely. Open rules keep the emulator from rejecting anything for a reason
+// this package is not trying to test.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
