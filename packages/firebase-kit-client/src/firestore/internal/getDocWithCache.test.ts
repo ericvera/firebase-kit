@@ -39,7 +39,8 @@ let caseCount = 0
 beforeEach(() => {
   caseCount += 1
 
-  // A distinct store per case, since the in-memory IndexedDB outlives them.
+  // A distinct store per case, so nothing a case writes can be reached
+  // through another case's store token.
   state.storeName = `spaces-${String(caseCount)}`
   state.remote = undefined
   vi.stubGlobal('navigator', { onLine: true })

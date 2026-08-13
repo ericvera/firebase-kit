@@ -38,8 +38,8 @@ default app. The callable layer has no such constraint — it takes a
 - **Timestamps survive the wire**: `Timestamp` instances are rebuilt from the
   plain `{ seconds, nanoseconds }` objects a JSON round trip leaves behind, for
   both the full and the lite Firestore SDKs
-- **Test doubles included**: In-memory stand-ins for `firebase/app`,
-  `firebase/functions` and `getsetdel`, shipped as a published entry point
+- **Test doubles included**: In-memory stand-ins for `firebase/app` and
+  `firebase/functions`, shipped as a published entry point
 
 ## Installation
 
@@ -66,13 +66,46 @@ npm install firebase 'getsetdel@^3.0.0'
 
 **Optional**
 
-- **`vitest`** (`^4.1.10`) — needed only by `firebase-kit-client/testing`. Skip
-  it if you do not install the test doubles; nothing on the production entry
-  points imports it.
+- **`vitest`** (`^4.1.10`) — needed only by `firebase-kit-client/mocks`. Skip it
+  if you do not install the test doubles; nothing on the production entry points
+  imports it.
 
 Cached Firestore reads need an IndexedDB implementation. A browser has one; a
-Node test run does not — install `fake-indexeddb` as a devDependency and import
-`fake-indexeddb/auto` from your vitest setup file.
+Node test run does not — `getsetdel` ships an in-memory stand-in for
+`idb-keyval`, its own IndexedDB dependency, so mock that from your vitest setup
+file and leave `getsetdel` itself real:
+
+```typescript
+// src/__test__/setup/vi.setup.ts
+import { testClearMockIndexedDB } from 'getsetdel/testing/idb-keyval'
+import { beforeEach, vi } from 'vitest'
+
+vi.mock('idb-keyval', async () => import('getsetdel/testing/idb-keyval'))
+
+// The backend holds its data in module scope, so clear it between cases.
+beforeEach(() => {
+  testClearMockIndexedDB()
+})
+```
+
+That mock only reaches `getsetdel` if vitest stops externalizing it, so inline
+the package as well:
+
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    setupFiles: ['./src/__test__/setup/vi.setup.ts'],
+    server: { deps: { inline: ['getsetdel'] } },
+  },
+})
+```
+
+Without that `inline` entry, `getsetdel`'s own `import 'idb-keyval'` resolves
+natively and never sees the mock, and every cached read fails with
+`ReferenceError: indexedDB is not defined`.
 
 ## Requirements
 
@@ -90,9 +123,9 @@ Node test run does not — install `fake-indexeddb` as a devDependency and impor
 | `firebase-kit-client/callable`     | `createActionableFunctionCaller` — one typed caller per callable group — and `toActionableError`                                                                        |
 | `firebase-kit-client/connectivity` | `ConnectionStatus`, `ConnectivityError`, and `withConnectivityHandling`, which turns a failed backend call into a resolved connectivity state                           |
 | `firebase-kit-client/firestore`    | `createFirestoreUtils` — plain reads, cached reads, cursor paging and cached subscriptions — plus `reviveTimestamps` and `FirestoreVariant`                             |
+| `firebase-kit-client/mocks`        | `createFirebaseAppMock` and `createFirebaseFunctionsClientMock` — the factories a vitest suite re-exports from its `__mocks__` modules                                  |
 | `firebase-kit-client/rate-limit`   | `createRateLimiter` and `RateLimitError`: a sliding-window guard that throws before a call leaves the browser                                                           |
 | `firebase-kit-client/runtime`      | `getHostingEnvironment`, which reports `Local` or `Live` from the hostname alone                                                                                        |
-| `firebase-kit-client/testing`      | `createFirebaseAppMock`, `createFirebaseFunctionsClientMock` and `createGetSetDelMock` — the factories a vitest suite re-exports from its `__mocks__` modules           |
 
 ## Usage
 
@@ -438,9 +471,9 @@ export const reviveStoredSpace = (stored: StoredSpace): Promise<StoredSpace> =>
   reviveTimestamps(stored, FirestoreVariant.FirestoreLite)
 ```
 
-### `firebase-kit-client/testing`
+### `firebase-kit-client/mocks`
 
-Three factories, each building the stand-in a vitest suite re-exports from a
+Two factories, each building the stand-in a vitest suite re-exports from a
 `__mocks__` module so that a bare `vi.mock('…')` picks it up. Each is called once
 at module scope, so every importer shares one registry.
 
@@ -449,7 +482,7 @@ nothing has been initialized, exactly as the real module does:
 
 ```typescript
 // src/__mocks__/firebase/app/index.ts
-import { createFirebaseAppMock } from 'firebase-kit-client/testing'
+import { createFirebaseAppMock } from 'firebase-kit-client/mocks'
 
 const mock = createFirebaseAppMock()
 
@@ -463,22 +496,25 @@ error paths:
 
 ```typescript
 // src/__mocks__/firebase/functions/index.ts
-import { createFirebaseFunctionsClientMock } from 'firebase-kit-client/testing'
+import { createFirebaseFunctionsClientMock } from 'firebase-kit-client/mocks'
 
 const mock = createFirebaseFunctionsClientMock()
 
 export const { getFunctions, httpsCallable, resetFunctionsMocks } = mock
 ```
 
-`createGetSetDelMock` delegates to the real store — running against whatever
-IndexedDB the suite installed — so a test asserts on what was actually stored.
-What it adds is the one thing a suite cannot provoke from outside: `failEntriesWith`
-arms the reset another tab wiping the store would raise, and `stubStore` takes
-the store out of play for the retry-loop cases that need fake timers:
+The third stand-in comes from `getsetdel` itself rather than from this package.
+`createGetSetDelMock` delegates to the real store — running against the
+in-memory `idb-keyval` backend the setup file above installs — so a test asserts
+on what was actually stored. What it adds is what a suite cannot provoke from
+outside: `failEntriesWith` makes every cache read reject with exactly the value
+armed, `simulateStoreReset` leaves the store in the state another tab wiping it
+would produce (it is async — await it), and `stubStore` takes the store out of
+play for the retry-loop cases that need fake timers:
 
 ```typescript
 // src/__mocks__/getsetdel/index.ts
-import { createGetSetDelMock } from 'firebase-kit-client/testing'
+import { createGetSetDelMock } from 'getsetdel/testing'
 import { vi } from 'vitest'
 
 const mock = createGetSetDelMock(
@@ -499,10 +535,12 @@ export const {
   GetSetDelResetError,
   handleResetError,
   keys,
+  queryInventory,
   resetGetSetDelMock,
   set,
   setMany,
   setMeta,
+  simulateStoreReset,
   stubStore,
 } = mock
 ```
@@ -583,12 +621,13 @@ real modules do not declare them.
   address, `Live` otherwise — including on a server render.
 - **`HostingEnvironment`**: `Local` or `Live`.
 
-### `firebase-kit-client/testing`
+### `firebase-kit-client/mocks`
 
 - **`createFirebaseAppMock()`**: `{ getApp, getApps, initializeApp, resetFirebaseAppMocks }`.
 - **`createFirebaseFunctionsClientMock()`**: `{ getFunctions, httpsCallable, resetFunctionsMocks }`.
-- **`createGetSetDelMock(actual)`**: The real `getsetdel` surface plus
-  `failEntriesWith`, `clearEntriesFault`, `stubStore` and `resetGetSetDelMock`.
+
+For the `getsetdel` stand-in, use `createGetSetDelMock` from `getsetdel/testing`
+— it is `getsetdel`'s own API, not this package's.
 
 ## License
 
