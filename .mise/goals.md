@@ -114,11 +114,41 @@ is covered by the existing colocated `src/<name>.test.ts` and
 `src/<name>.emulator.test.ts` suites, extended in place if a behavior gap shows
 up.
 
+### Adopt `getsetdel/testing` (in scope, by explicit user direction)
+
+`getsetdel` 3 ships the test infrastructure this repo currently hand-writes, and
+this work adopts it rather than carrying a local duplicate:
+
+- **`getsetdel/testing`** exports its own `createGetSetDelMock`, which is a
+  **strict superset** of the repo's local factory at
+  `packages/firebase-kit-client/src/testing/createGetSetDelMock.ts`: same
+  `failEntriesWith` / `clearEntriesFault` / `stubStore` / `resetGetSetDelMock`
+  controls, plus a new `simulateStoreReset`, and it keeps `queryInventory`
+  (which the local copy drops with a comment explaining that getsetdel v2 did
+  not export the type its signature needs — v3 exports it, so the workaround is
+  obsolete). The local factory and its test are deleted.
+- **`getsetdel/testing/idb-keyval`** is an in-memory `idb-keyval` backend that
+  replaces `fake-indexeddb`, which is dropped as a dev dependency.
+  `packages/firebase-kit-client/src/__test__/setup/vi.setup.ts` swaps
+  `import 'fake-indexeddb/auto'` for a `vi.mock('idb-keyval', ...)` plus a
+  `beforeEach(testClearMockIndexedDB)`, and
+  `packages/firebase-kit-client/vitest.config.ts` gains
+  `server.deps.inline: ['getsetdel']` — required, because Vitest externalizes
+  `node_modules` packages and getsetdel's own `idb-keyval` import would
+  otherwise bypass the mock.
+
+The repo's `__mocks__` shim is already at the vitest project root
+(`vitest.config.ts` sets `root` to `src`, and the shim is at
+`src/__mocks__/getsetdel/`), which is where getsetdel's documented setup requires
+it — so no file moves.
+
+**This removes `createGetSetDelMock` from the published
+`firebase-kit-client/testing` entry point** — a breaking API change on top of the
+peer-range replacement. Consumers import it from `getsetdel/testing` instead.
+Both READMEs' testing documentation changes accordingly.
+
 ## Out of scope
 
 - Widening `typescript` past `6.*` or `@types/node` past `24.*`.
-- Adopting `getsetdel`'s new `getsetdel/testing` subpath (an in-memory
-  idb-keyval backend) to replace the repo's hand-written `__mocks__/getsetdel`
-  and its `fake-indexeddb` dev dependency. A genuine simplification, but it is a
-  refactor, not an upgrade — separate work.
-- Any feature, behavior, or API change not forced by an upgraded dependency.
+- Any feature, behavior, or API change not forced by an upgraded dependency or
+  by the `getsetdel/testing` adoption above.
