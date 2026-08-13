@@ -65,7 +65,7 @@ npm install firebase-admin firebase-functions betterbe
 
 **Required**
 
-- **`firebase-admin`** (`^13.10.0`) — the Admin SDK. Used by the root entry
+- **`firebase-admin`** (`^14.2.0`) — the Admin SDK. Used by the root entry
   point, `./auth`, `./firestore`, `./tasks` and `./testing`.
 - **`firebase-functions`** (`^7.3.2`) — used by `./auth`, `./callable`,
   `./errors`, `./firestore`, `./tasks` and `./validation`. `HttpsError` is the
