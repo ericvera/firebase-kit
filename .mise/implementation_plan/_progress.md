@@ -29,3 +29,55 @@
   no new rule violations. End-to-end tests N/A per the config's
   *consumer-facing wiring* Test exception; its substitute packed-tarball
   consumer check is task 2.1.
+
+## 1.2 — Ported `firestore-snapshot-utils` into `firebase-kit-admin` with new tests
+
+- Key changes:
+  - `src/testing/internal/` (new) — `DocumentChangeSnapshot.ts`,
+    `ascCompare.ts`, `extractTimestamps.ts`, `maskProps.ts`, `normalizeData.ts`
+    copied verbatim from the v4.0.0 local clone (byte-identical; only the
+    barrel-level wiring differs).
+  - `src/testing/normalizeData.ts` (new) — the public `normalizeData` and
+    `NormalizeDataOptions`, `logTimestamps` kept.
+  - `src/testing/getDBSnapshot.ts`, `getDBChanges.ts`, `getDBChangesDiff.ts` —
+    the three wrappers absorbed the library bodies. `DebugOptions`, the
+    `logTimestamps` `console.log` block and the `TimestampDebugOptions`
+    construction were dropped as unreachable; `getDBChanges` applies
+    `masks ?? {}` in place of the lost default parameter. Public signatures
+    unchanged.
+  - `src/testing/index.ts` — added `export * from './normalizeData.js'` and
+    `export type * from './internal/DocumentChangeSnapshot.js'`, so
+    `NormalizeDataOptions`, `DBSnapshotChanges` and the four snapshot class
+    types are nameable from `firebase-kit-admin/testing`.
+  - New colocated tests: `internal/ascCompare.test.ts`,
+    `internal/extractTimestamps.test.ts`, `internal/maskProps.test.ts`,
+    `internal/normalizeData.test.ts`,
+    `internal/DocumentChangeSnapshot.test.ts`, `normalizeData.test.ts`.
+  - Rewrote `getDBSnapshot.test.ts`, `getDBChanges.test.ts` and
+    `getDBChangesDiff.test.ts` against the in-tree implementation; no
+    `vi.mock('firestore-snapshot-utils', ...)` remains. The old
+    `undefined`-vs-`{}` cases were replaced with real masking assertions per
+    the task file.
+  - `src/__test__/utils/createDocSnapshot.ts` (new) — builds the
+    `QueryDocumentSnapshot` slice (`ref.path`, `ref.parent.id`, `updateTime`,
+    `data()`) the diffing code reads, so the ported code is unit-testable
+    without an emulator.
+  - `src/firestore/createFirestoreUtils.emulator.test.ts` and
+    `checkDocumentInQueryExists.emulator.test.ts` — `normalizeData` now imports
+    from `../testing/normalizeData.js`.
+  - `packages/firebase-kit-admin/package.json` — `firestore-snapshot-utils`
+    removed from `peerDependencies`, `peerDependenciesMeta` and
+    `devDependencies`; `jest-diff` `^30.4.1` added to `dependencies`.
+    `firebase-admin` untouched at `^13.10.0`.
+  - `packages/firebase-kit-admin/README.md` — optional-peer bullet and install
+    snippet entry deleted (prose reworded for the single remaining package);
+    the `### firebase-kit-admin/testing` section now documents
+    `normalizeData(data, options?)` and the six newly public types.
+  - `yarn.lock` — regenerated.
+- Deviations from plan: none.
+- Verification: `yarn format`, `yarn lint`, `yarn build`, `yarn test:unit`
+  (54 + 29 files, 227 + 149 tests) and `yarn test:emulator` (7 files, 21 tests)
+  all passed. No emulator inline snapshot churned, confirming the v4 type-token
+  change does not reach the four unmasked `normalizeData` calls. End-to-end
+  tests N/A per the checklist; the manifest/README changes are covered by task
+  2.1's packed-tarball consumer check.

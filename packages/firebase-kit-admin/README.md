@@ -77,16 +77,13 @@ npm install firebase-admin firebase-functions betterbe
 
 **Optional**
 
-- **`firestore-snapshot-utils`** (`^3.0.1`) — needed only by
-  `firebase-kit-admin/testing`, which builds the before/after DB snapshots and
-  the printable diff on top of it.
 - **`vitest`** (`^4.1.10`) — needed only by `firebase-kit-admin/testing` and
   `firebase-kit-admin/mocks`. Nothing on the production entry points imports it.
 
-Install both if you use the test harness:
+Install it if you use the test harness:
 
 ```bash
-npm install --save-dev firestore-snapshot-utils vitest
+npm install --save-dev vitest
 ```
 
 ## Requirements
@@ -711,9 +708,15 @@ from `process.env`) follow the same shape.
   directly.
 - **`getDBSnapshot(inputs)`**, **`getDBChanges(before, after, masks?)`**,
   **`getDBChangesDiff(changes)`**: The before/after snapshot and printable diff.
+- **`normalizeData(data, options?)`**: Replaces Firestore Timestamps with
+  `/Timestamp XXXX/` (indexed in chronological order) and Buffers with
+  `/Buffer <base64url>/`, so a snapshot assertion stays stable across runs.
 - **`expectSuccessResult(response)`**, **`testGetFirestoreReset()`**.
 - **`EmulatorHooksOptions`**, **`EmulatorReset`**, **`RequestBuildersOptions`**,
-  **`TestableDBRef`**, **`SnapshotInput`**.
+  **`TestableDBRef`**, **`SnapshotInput`**, **`NormalizeDataOptions`**,
+  **`DBSnapshotChanges`**, **`AddedDocumentSnapshot`**,
+  **`RemovedDocumentSnapshot`**, **`ModifiedDocumentSnapshot`**,
+  **`UnmodifiedDocumentSnapshot`**.
 
 ### `firebase-kit-admin/validation`
 

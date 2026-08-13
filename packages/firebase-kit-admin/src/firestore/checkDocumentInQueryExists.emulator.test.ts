@@ -1,5 +1,4 @@
 import type { AuthData } from 'firebase-functions/tasks'
-import { normalizeData } from 'firestore-snapshot-utils'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   addPersonToDB,
@@ -9,6 +8,7 @@ import {
   TestPersonID2,
 } from '../__test__/db/index.js'
 import { setFakeTimer } from '../__test__/utils/setFakeTimer.js'
+import { normalizeData } from '../testing/normalizeData.js'
 import { checkDocumentInQueryExists } from './checkDocumentInQueryExists.js'
 
 vi.hoisted(() => {

@@ -4066,7 +4066,7 @@ __metadata:
     firebase-functions: "npm:^7.3.2"
     firebase-kit-protocol: "workspace:*"
     firebase-tools: "npm:15.26.0"
-    firestore-snapshot-utils: "npm:^3.0.1"
+    jest-diff: "npm:^30.4.1"
     scdate-testing: "npm:^7.1.2"
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.10"
@@ -4074,11 +4074,8 @@ __metadata:
     betterbe: ^4.1.0
     firebase-admin: ^13.10.0
     firebase-functions: ^7.3.2
-    firestore-snapshot-utils: ^3.0.1
     vitest: ^4.1.10
   peerDependenciesMeta:
-    firestore-snapshot-utils:
-      optional: true
     vitest:
       optional: true
   languageName: unknown
@@ -4230,17 +4227,6 @@ __metadata:
     "@firebase/storage-compat": "npm:0.4.4"
     "@firebase/util": "npm:1.15.2"
   checksum: 10c0/f8b89a933833cf741faefbb1a69cad09a3ce29baea0069a408f5b4a518be1f88c292c9b81c74d1680e6a82aa20163915fa40bfff44eb1c435ab9bd13ca977921
-  languageName: node
-  linkType: hard
-
-"firestore-snapshot-utils@npm:^3.0.1":
-  version: 3.0.1
-  resolution: "firestore-snapshot-utils@npm:3.0.1"
-  dependencies:
-    jest-diff: "npm:^30.4.1"
-  peerDependencies:
-    firebase-admin: ^13.5.0
-  checksum: 10c0/7ac3830c45e00c5f833fb7a66c6e5feec7c0eb0f7f5a64cff057de7d3da82233a4b7383aaa2ad235f42bee8ff9a5496e3c9b246c0b82014ad53c9525ab6846f7
   languageName: node
   linkType: hard
 
