@@ -23,12 +23,12 @@ node-modules`) publishing three packages from `packages/`:
 `firebase-kit-protocol`, `firebase-kit-client`, and `firebase-kit-admin`. Both
 dependents declare `firebase-kit-protocol` as `workspace:*`.
 
-This task is the first of a dependency refresh. Nothing has changed yet. A later
-task (1.2) upgrades three dependencies across a major boundary
-(`firebase-admin`, `firestore-snapshot-utils`, `getsetdel`) — **this task must
-not touch those three.** Keeping them separate is deliberate: it makes any
-breakage in task 1.2 attributable to a major upgrade rather than to the tooling
-bumps here.
+This task is the first of a dependency refresh. Nothing has changed yet. Later
+tasks merge `firestore-snapshot-utils` into `firebase-kit-admin` (1.2), upgrade
+`firebase-admin` across a major boundary (1.3), and move `getsetdel` to 3
+(1.4) — **this task must not touch any of those three.** Keeping them separate is
+deliberate: it makes any later breakage attributable to a dependency change
+rather than to the tooling bumps here.
 
 Version data was read from the npm registry on 2026-08-13.
 
@@ -79,10 +79,10 @@ Version data was read from the npm registry on 2026-08-13.
      (`^12.16.0`)` becomes `(`^12.17.1`)`. Leave the dynamic-imports sentence
      untouched.
 
-4. Leave every other README version alone in this task. `firebase-admin`
-   (`:68`), `firestore-snapshot-utils` (`:80`), and the three `getsetdel`
-   mentions in the client README (`:57`, `:64`, and the "must be major 2"
-   paragraph at `:67`) all belong to task 1.2.
+4. Leave every other README version alone in this task. `firestore-snapshot-utils`
+   (admin `:80`) belongs to task 1.2, `firebase-admin` (admin `:68`) to task 1.3,
+   and the three `getsetdel` mentions in the client README (`:57`, `:64`, and the
+   "must be major 2" paragraph at `:67`) to task 1.4.
 
 ## Testing suggestions
 
@@ -123,7 +123,7 @@ violations; do not disable the rule or pin back the version.
 
 - [ ] `eslint` reads `^10.8.1` in all four manifests (root, admin, client, protocol)
 - [ ] `typescript-eslint` reads `^8.67.0` in the root manifest
-- [ ] `firebase` reads `^12.17.1` in **both** the `dependencies`-side (dev) and `peerDependencies` blocks of `packages/firebase-kit-client/package.json`
+- [ ] `firebase` reads `^12.17.1` in **both** the `devDependencies` and `peerDependencies` blocks of `packages/firebase-kit-client/package.json`
 - [ ] `firebase-functions` reads `^7.3.2` in **both** the dev and peer blocks of `packages/firebase-kit-admin/package.json`
 - [ ] `scdate-testing` reads `^7.1.2` in the admin manifest
 - [ ] `typescript` still reads `^6.0.3` and `@types/node` still reads `^24.13.3` everywhere they appear

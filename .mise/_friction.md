@@ -1,0 +1,5 @@
+# Friction
+
+goals: reopened twice after approval — user added `getsetdel/testing` adoption, then the `firestore-snapshot-utils` merge plus the client `./testing` → `./mocks` rename. Each reopen invalidated the plan in progress and forced a rewrite (4 tasks → 6).
+critic plan: stalled at 2 blocking after 3 rounds (blocking per round: 1, 2, 2). Rounds 1→2 are not comparable — the scope change between them replaced the artifact. Round 3 verified round 2's fixes were real and complete, then found 2 genuinely new blockers in untouched territory (a transitive `@google-cloud/firestore` 7→8 major that firebase-admin's own changelog never mentions; and the release commit footer that decides major-vs-minor, which no task carried). Both were verified and fixed, but the count did not drop.
+critic plan: each round found real defects in areas the previous rounds had not examined rather than re-finding the same ones — suggests the per-round critic brief should explicitly require checking transitive dependency majors and the release/publish path, which two passes both missed.

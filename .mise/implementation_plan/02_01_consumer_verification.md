@@ -23,23 +23,29 @@ three packages from `packages/`: `firebase-kit-protocol`, `firebase-kit-client`,
 and `firebase-kit-admin`. Both dependents declare `firebase-kit-protocol` as
 `"firebase-kit-protocol": "workspace:*"` in their `dependencies`.
 
-**Tasks 1.1, 1.2, and 1.3 already landed**, and the repo's own suite is green.
+**Tasks 1.1 through 1.5 already landed**, and the repo's own suite is green.
 Between them they changed exactly the things a consumer sees:
 
 - **Task 1.1** moved in-range floors, including two peer ranges: `firebase`
   `^12.17.1` (client) and `firebase-functions` `^7.3.2` (admin).
-- **Task 1.2** replaced three peer ranges across a major boundary:
-  `firebase-admin` `^14.2.0` and `firestore-snapshot-utils` `^4.0.0` (admin),
-  `getsetdel` `^3.0.0` (client). It also updated both READMEs and deleted a
-  paragraph explaining the old `getsetdel` v2 pin.
-- **Task 1.3** **removed `createGetSetDelMock` from the published
-  `firebase-kit-client/testing` entry point** (consumers now import it from
-  `getsetdel/testing`), dropped `fake-indexeddb`, and rewrote the client README's
-  testing setup around `getsetdel/testing/idb-keyval`.
+- **Task 1.2** **merged `firestore-snapshot-utils` into `firebase-kit-admin`** —
+  it is no longer a peer at all, `jest-diff` `^30.4.1` became a regular
+  `dependency`, and `normalizeData` joined the `firebase-kit-admin/testing`
+  entry point. The admin README lost its `firestore-snapshot-utils` section.
+- **Task 1.3** replaced the `firebase-admin` peer range with `^14.2.0`, which
+  task 1.2 had unblocked.
+- **Task 1.4** replaced the `getsetdel` peer range with `^3.0.0` and deleted the
+  README paragraph explaining the old v2 pin.
+- **Task 1.5** **removed `createGetSetDelMock`** (consumers import it from
+  `getsetdel/testing` now), dropped `fake-indexeddb`, rewrote the client README's
+  testing setup around `getsetdel/testing/idb-keyval`, and **renamed the
+  published `firebase-kit-client/testing` subpath to
+  `firebase-kit-client/mocks`**.
 
-The last of those is the highest-value thing to verify here: an entry point lost
-an export and the README's testing instructions were rewritten, and nothing in
-the repo's own suite can catch a mistake in either.
+The last two tasks are the highest-value things to verify here: an entry point
+was renamed and lost an export, a new runtime dependency was added, and the
+README's testing instructions were rewritten — and nothing in the repo's own
+suite can catch a mistake in any of it.
 
 The config's Test exceptions entry is explicit about the mechanism, and about one
 trap in particular:
@@ -78,33 +84,54 @@ paper over it in the throwaway consumer.
    manager auto-install them — the point is to confirm the documented ranges
    resolve together. From the two READMEs, that is at minimum:
    - admin: `firebase-admin@^14.2.0`, `firebase-functions@^7.3.2`,
-     `betterbe@^4.1.0`, and for the test harness
-     `firestore-snapshot-utils@^4.0.0` and `vitest@^4.1.10`
+     `betterbe@^4.1.0`, and `vitest@^4.1.10` for the test harness
    - client: `firebase@^12.17.1`, `getsetdel@^3.0.0`, and `vitest@^4.1.10`
 
-   A peer-resolution warning or error here is a real finding: it means the
-   declared ranges disagree with each other or with the READMEs.
+   **`firestore-snapshot-utils` must NOT be installed.** Task 1.2 merged it in,
+   so it is no longer a peer. If the admin README still asks for it, that is a
+   defect from task 1.2.
+
+   **Use npm for this install, not only Yarn.** Yarn downgrades peer conflicts to
+   `YN0060` warnings while npm hard-fails with `ERESOLVE` — and npm's stricter
+   behavior is what a consumer following the README will hit. A peer-resolution
+   warning or error from either is a real finding: it means the declared ranges
+   disagree with each other or with the READMEs.
+
+   This is the check that would have caught the original blocker: while
+   `firestore-snapshot-utils` was still a peer, it capped `firebase-admin` at
+   `^13.5.0` and made `firebase-admin@^14` uninstallable for a consumer. Confirm
+   that conflict is genuinely gone rather than merely unreported.
 
 4. Extract every documented snippet to **the path named in its header comment**
    and run it verbatim. Do not adapt a snippet to make it work — if it needs
    adapting, the README is wrong and that is the finding. Cover at least:
    - The install snippets in both READMEs (they are the first thing a consumer
-     runs, and the client one changed in task 1.2 to `getsetdel@^3.0.0`).
+     runs, and the client one changed in task 1.4 to `getsetdel@^3.0.0`).
    - An import from each subpath in both `exports` maps, confirming each resolves
      and is typed. Admin: `.`, `./auth`, `./callable`, `./errors`, `./firestore`,
      `./mocks`, `./runtime`, `./tasks`, `./testing`, `./validation`. Client: `.`,
      `./callable`, `./connectivity`, `./firestore`, `./rate-limit`, `./runtime`,
-     `./testing`.
+     **`./mocks`** (renamed from `./testing` by task 1.5).
    - **The client README's rewritten testing setup** — the `vi.mock('idb-keyval',
      ...)` setup file, the `beforeEach(testClearMockIndexedDB)`, the
      `server.deps.inline: ['getsetdel']` vitest config, and a `__mocks__/getsetdel`
      shim importing `createGetSetDelMock` from `getsetdel/testing`. Run an actual
      test through it. This is the single most valuable check in the task.
+   - **`firebase-kit-admin/testing`'s merged surface** — `getDBSnapshot`,
+     `getDBChanges`, `getDBChangesDiff`, and the newly exported `normalizeData`,
+     all resolving from the package itself with no `firestore-snapshot-utils`
+     installed. Confirm `jest-diff` arrives transitively rather than needing an
+     explicit install.
 
-5. Confirm `import { createGetSetDelMock } from 'firebase-kit-client/testing'`
-   now **fails**, and that the README no longer tells anyone to write it. A
-   consumer following the old instructions should get a clear resolution error,
-   not a silent `undefined`.
+5. Confirm the three removals fail loudly rather than silently, and that no
+   README still instructs any of them:
+   - `import { createGetSetDelMock } from 'firebase-kit-client/testing'` — fails
+     on both counts (the export is gone and so is the subpath).
+   - Any import from `firebase-kit-client/testing` — the subpath no longer
+     exists; a consumer should get a clear resolution error, not a silent
+     `undefined`.
+   - `import { normalizeData } from 'firestore-snapshot-utils'` with the package
+     not installed — confirms nothing in the shipped tree still reaches for it.
 
 6. Type-check the consumer project against the packed `.d.ts` files, not against
    the repo's source. This is what catches a broken `exports` map or a `.d.ts`
@@ -141,11 +168,15 @@ the snippets is explicitly not verification — each one must actually run.
   first `createStore` fails with `ReferenceError: indexedDB is not defined` from
   inside `node_modules/idb-keyval` — and that is a README defect to fix, not a
   consumer-project problem to work around.
-- **`firestore-snapshot-utils` and `vitest` are optional peers** of the admin
-  package (`peerDependenciesMeta`). Verify both paths: the production entry
-  points must import cleanly **without** them installed, and `./testing` and
-  `./mocks` must work once they are. Installing everything up front hides a
-  wrongly-required dependency.
+- **`vitest` is an optional peer** of both packages (`peerDependenciesMeta`), and
+  after task 1.2 it is the admin package's *only* optional peer. Verify both
+  paths: the production entry points must import cleanly **without** it
+  installed, and `./testing` / `./mocks` must work once it is. Installing
+  everything up front hides a wrongly-required dependency.
+- **`jest-diff` must arrive transitively, not as something the consumer installs.**
+  Task 1.2 made it a regular `dependency` precisely so consumers install nothing
+  extra. If `firebase-kit-admin/testing` fails without an explicit `jest-diff`
+  install, it was declared in the wrong block.
 - **Clean the consumer between runs.** A stale `node_modules` or lockfile from a
   previous attempt can mask a resolution change.
 
@@ -154,11 +185,15 @@ the snippets is explicitly not verification — each one must actually run.
 - [ ] All three packages were packed with `yarn pack`; no `npm pack` was used anywhere
 - [ ] The consumer project lives outside the repository tree
 - [ ] The packed `firebase-kit-client` and `firebase-kit-admin` manifests contain a concrete `firebase-kit-protocol` version, not `workspace:*`
-- [ ] Every peer was installed explicitly at its README-documented range, and the install produced no peer-resolution warning or error
-- [ ] Every subpath in both `exports` maps was imported and resolved
-- [ ] The admin production entry points import cleanly with the optional peers **absent**, and `./testing` / `./mocks` work with them present
+- [ ] Every peer was installed explicitly at its README-documented range, and the install produced no peer-resolution warning or error — verified with **npm**, not only Yarn
+- [ ] `firestore-snapshot-utils` was not installed, and nothing required it
+- [ ] `jest-diff` arrived transitively; `firebase-kit-admin/testing` works without installing it explicitly
+- [ ] Every subpath in both `exports` maps was imported and resolved, including the renamed client `./mocks`
+- [ ] `firebase-kit-admin/testing` exposes `getDBSnapshot`, `getDBChanges`, `getDBChangesDiff`, and `normalizeData`
+- [ ] The admin production entry points import cleanly with `vitest` **absent**, and `./testing` / `./mocks` work with it present
 - [ ] The client README's rewritten testing setup was reproduced verbatim and an actual test ran through the in-memory getsetdel backend
-- [ ] `import { createGetSetDelMock } from 'firebase-kit-client/testing'` fails, and no README still instructs it
+- [ ] All three removals fail loudly: `createGetSetDelMock` from the client, the whole `firebase-kit-client/testing` subpath, and any residual reach for `firestore-snapshot-utils` — and no README still instructs any of them
 - [ ] The consumer type-checks against the packed `.d.ts` files
 - [ ] Every snippet ran verbatim — none was adapted to make it pass
+- [ ] **The squashed merge commit message carries a breaking-change footer** (a `!` after the type, or a `BREAKING CHANGE:` body). `.github/workflows/publish.yml` derives the version from commit footers alone, and `Ship` is `merge (squash)` — without the footer this publishes as a minor and consumers on the v1 range resolve peers they cannot satisfy. No test or quality gate catches this.
 - [ ] End-to-end tests: this task **is** the substitute verification for the config's *consumer-facing wiring* Test exception. The evidence recorded in the task report is the deliverable.
