@@ -54,23 +54,15 @@ yarn add firebase-kit-client
 npm will not install these for you. Add them yourself:
 
 ```bash
-npm install firebase 'getsetdel@^2.0.0'
+npm install firebase 'getsetdel@^3.0.0'
 ```
 
 **Required**
 
 - **`firebase`** (`^12.17.1`) — the Firebase JS SDK. Loaded through dynamic
   imports, so the Functions and Firestore SDKs stay out of your initial bundle.
-- **`getsetdel`** (`^2.0.0`) — the IndexedDB store the cached Firestore reads
+- **`getsetdel`** (`^3.0.0`) — the IndexedDB store the cached Firestore reads
   persist through.
-
-**`getsetdel` must be major 2.** `getsetdel` is published at `3.0.0`, so a
-project already on v3 will hit a peer-resolution conflict when it adds this
-package. That is deliberate rather than an oversight: this package is pinned to
-the v2 API, and the range will move when it is ported. Until then, a project on
-`getsetdel` 3 has to come back to 2 to install this package at all: the peer is
-required, not optional, so the conflict fires at install time no matter which
-entry points you go on to import.
 
 **Optional**
 

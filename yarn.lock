@@ -4076,12 +4076,12 @@ __metadata:
     fake-indexeddb: "npm:^6.2.5"
     firebase: "npm:^12.17.1"
     firebase-kit-protocol: "workspace:*"
-    getsetdel: "npm:^2.0.0"
+    getsetdel: "npm:^3.0.0"
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.10"
   peerDependencies:
     firebase: ^12.17.1
-    getsetdel: ^2.0.0
+    getsetdel: ^3.0.0
     vitest: ^4.1.10
   peerDependenciesMeta:
     vitest:
@@ -4482,12 +4482,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"getsetdel@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "getsetdel@npm:2.0.0"
+"getsetdel@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "getsetdel@npm:3.0.0"
   dependencies:
-    idb-keyval: "npm:^6.2.5"
-  checksum: 10c0/822d147b328e5ad78259638298066e60f6f75332bbdecaf7c1400bc2010dc326de9902e3e2d1d0fb141f2f193e224cd5c7a5c14f90be11b01ea0c7a90612870d
+    idb-keyval: "npm:^6.3.0"
+  checksum: 10c0/f11f98005bce052533c22d831f2c9dd6b8351ca6b7f7fc66bbf4328e04b07d435ea94a289df56fe70f597c092d69b9db6e1cef1b99c420e65a72b6f5afb31317
   languageName: node
   linkType: hard
 
@@ -4845,7 +4845,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"idb-keyval@npm:^6.2.5":
+"idb-keyval@npm:^6.3.0":
   version: 6.3.0
   resolution: "idb-keyval@npm:6.3.0"
   checksum: 10c0/d03db95199acb445c5d0ec4dfc93bbc92edc41112e2bedc901a4dc3d5c21b10d1ce7a9b766da9ca61f7ea4d09ed55591f2a997307c91b6e4a5318c0e071b849e

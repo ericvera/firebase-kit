@@ -47,7 +47,7 @@
   },
   "peerDependencies": {
     "firebase": "^12.17.1",
-    "getsetdel": "^2.0.0",
+    "getsetdel": "^3.0.0",
     "vitest": "^4.1.10"
   },
   "peerDependenciesMeta": {
@@ -61,7 +61,7 @@
     "eslint": "^10.8.1",
     "fake-indexeddb": "^6.2.5",
     "firebase": "^12.17.1",
-    "getsetdel": "^2.0.0",
+    "getsetdel": "^3.0.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
