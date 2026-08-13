@@ -1,1 +1,6 @@
-{}
+{
+  "route": "bugfix",
+  "approved": {
+    "goals": "949cda89d4f6bb09d8501eb616bd8ffc2fdbad5c"
+  }
+}
