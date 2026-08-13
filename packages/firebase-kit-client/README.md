@@ -59,7 +59,7 @@ npm install firebase 'getsetdel@^2.0.0'
 
 **Required**
 
-- **`firebase`** (`^12.16.0`) — the Firebase JS SDK. Loaded through dynamic
+- **`firebase`** (`^12.17.1`) — the Firebase JS SDK. Loaded through dynamic
   imports, so the Functions and Firestore SDKs stay out of your initial bundle.
 - **`getsetdel`** (`^2.0.0`) — the IndexedDB store the cached Firestore reads
   persist through.
