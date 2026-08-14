@@ -259,3 +259,101 @@
   *consumer-facing wiring* Test exception; its substitute verification —
   a packed-tarball consumer install exercising the renamed `./mocks` entry
   point and the new setup snippets — is task 2.1.
+
+## 2.1 — Verified the new peer set from a packed consumer; fixed two defects in the client README's vitest setup
+
+- Key changes:
+  - `packages/firebase-kit-client/README.md` — the `vitest.config.ts` block that
+    task 1.5 added was **wrong in two ways**, both found by running it and both
+    fixed here. `server.deps.inline` is now
+    `['getsetdel', 'firebase-kit-client']`, and the block gained
+    `root: join(import.meta.dirname, 'src')` (plus the `node:path` import) with
+    the surrounding prose rewritten to explain each. No other repo file changed;
+    this task otherwise produces evidence, not changes.
+- Deviations from plan: the task file predicted "None in the repo". Two README
+  defects turned up, so per its own instruction the fix landed in the source
+  package and the whole verification was re-run from step 1 on freshly packed
+  tarballs.
+- **Defect 1 — `inline: ['getsetdel']` alone does not work for a consumer.**
+  Reproduced exactly the failure mode the task file's gotcha predicted, from the
+  consumer side: `ReferenceError: indexedDB is not defined`, raised out of
+  `node_modules/idb-keyval`, on the first `db.getDocWithCache`. Diagnosed by
+  controlled experiment rather than assumed — `['getsetdel']` alone fails,
+  `['firebase-kit-client']` alone fails, `['getsetdel', 'firebase-kit-client']`
+  passes. The reason the repo's own `vitest.config.ts` needs only `getsetdel` is
+  that its code under test is source, which vite processes by definition; a
+  consumer's copy is resolved from `node_modules` and externalized, so *its*
+  `import 'getsetdel'` never reaches the mocked copy. The repo config is
+  correct as-is and was left alone.
+- **Defect 2 — the documented config never resolved the README's own
+  `src/__mocks__/` modules.** With no `test.root`, a bare
+  `vi.mock('firebase/functions')` auto-mocked the real module instead of picking
+  up the documented stand-in: `resetFunctionsMocks` absent and
+  `httpsCallable()` returning `undefined`, which surfaced downstream as
+  `TypeError: callable is not a function` — a silent wrong answer, not an error.
+  Setting `root` to `src` fixes it and matches what the repo's own client
+  `vitest.config.ts` already does for the same reason (its comment says so).
+- Evidence (single clean run, `scratchpad/verify.sh`, from freshly packed
+  tarballs into a wiped consumer at `scratchpad/consumer`, outside the repo):
+  - Packed with `yarn pack` only; `npm pack` was never invoked. Both dependents'
+    packed manifests carry `"firebase-kit-protocol": "1.0.0"`, not
+    `workspace:*`. All three tarballs contain zero `__test__`, `__mocks__` or
+    `*.test.*` entries.
+  - Both READMEs' peer install snippets ran verbatim under npm, then every peer
+    was re-pinned explicitly at its documented range under
+    `npm --strict-peer-deps`, then the three tarballs likewise. Zero `ERESOLVE`,
+    zero peer warning. Resolved: `firebase-admin` 14.2.0, `firebase-functions`
+    7.3.2, `betterbe` 4.1.0, `firebase` 12.17.1, `getsetdel` 3.0.0,
+    `idb-keyval` 6.3.0, `vitest` 4.1.10, `jest-diff` 30.4.1 (transitive, never
+    named by the consumer). `firestore-snapshot-utils` and `fake-indexeddb`
+    absent from the whole tree — the `firebase-admin@^14` conflict is genuinely
+    gone, not merely unreported. A parallel Yarn 4.18.0 install agreed: its only
+    four `✘` peer requirements are the pre-existing `@firebase/*-compat` →
+    `@firebase/app-types` ones internal to the `firebase` SDK, none naming a
+    firebase-kit package or any of its declared peers.
+  - All 29 documented snippets extracted to the path in each header comment and
+    none adapted; two consumer sub-projects (`client-app`, `admin-app`) because
+    the two READMEs collide on `src/firebase/db.ts` and
+    `src/spaces/renameSpace.ts`.
+  - All 17 subpaths across both `exports` maps import and resolve their
+    documented exports, including the renamed client `./mocks`.
+    `firebase-kit-admin/testing` exposes `getDBSnapshot`, `getDBChanges`,
+    `getDBChangesDiff` and `normalizeData`.
+  - Optional-peer split verified both ways: with `vitest` **absent** all 14
+    production entry points import cleanly and only the three
+    `./testing` / `./mocks` ones fail (`ERR_MODULE_NOT_FOUND` for `vitest`);
+    with it present all 17 pass.
+  - The client README's testing setup ran for real: 2 files / 3 tests green
+    through the in-memory getsetdel backend, including a `callSpaces` call
+    driven by the documented `src/__mocks__/firebase/functions` stand-in.
+  - `firebase-kit-admin/testing` exercised functionally without an emulator:
+    `normalizeData` on a Timestamp and a Buffer, and
+    `getDBSnapshot` → `getDBChanges` (masked) → `getDBChangesDiff`, whose output
+    is rendered by `jest-diff` — proving it arrives transitively. 3 tests green.
+  - All three removals fail loudly: `firebase-kit-client/testing` throws
+    `ERR_PACKAGE_PATH_NOT_EXPORTED` for any import; a static
+    `import { createGetSetDelMock } from 'firebase-kit-client/mocks'` throws a
+    link-time `SyntaxError`; `firestore-snapshot-utils` throws
+    `ERR_MODULE_NOT_FOUND`. No README instructs any of them (zero hits for
+    `firebase-kit-client/testing`, `fake-indexeddb` and
+    `firestore-snapshot-utils` across every `*.md`).
+  - Both consumer apps type-check against the packed `.d.ts` with
+    `skipLibCheck: false` — 0 errors, so nothing shipped reaches for a file the
+    `files` globs exclude.
+- Verification: `yarn format` (no changes), `yarn lint`, `yarn build` and
+  `yarn test:unit` (54 + 28 files, 227 + 144 tests) all passed after the README
+  fix. `yarn test:emulator` not run: the change is a client-package README and
+  `*.emulator.test.ts` exists only in `firebase-kit-admin`. End-to-end tests:
+  **this task is** the substitute verification for the config's
+  *consumer-facing wiring* Test exception.
+- **Carried forward, not verified here**: the squashed merge commit must carry a
+  breaking-change footer (`!` after the type, or a `BREAKING CHANGE:` body).
+  That commit does not exist yet. `.github/workflows/publish.yml` derives the
+  version from commit footers alone and `Ship` is `merge (squash)`, so without
+  it this publishes as a minor and consumers on the v1 range resolve peers they
+  cannot satisfy.
+- **Observed, not fixed (out of this plan's scope)**: `firebase-kit-admin`'s
+  README documents `src/__mocks__/firebase-admin/...` stand-ins but no
+  `vitest.config.ts` at all, so a consumer copying them hits the same
+  auto-mocking trap defect 2 covered on the client side. Adding that section is
+  new documentation rather than a correction to something this plan changed.

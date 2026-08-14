@@ -88,24 +88,33 @@ beforeEach(() => {
 })
 ```
 
-That mock only reaches `getsetdel` if vitest stops externalizing it, so inline
-the package as well:
+That mock only reaches `getsetdel` if vitest stops externalizing it, and it only
+reaches your cached reads if vitest stops externalizing this package too — the
+`import 'getsetdel'` that has to resolve to the mocked copy is the one inside
+`firebase-kit-client`, not the one in your own code. Inline both:
 
 ```typescript
 // vitest.config.ts
+import { join } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    setupFiles: ['./src/__test__/setup/vi.setup.ts'],
-    server: { deps: { inline: ['getsetdel'] } },
+    // `src` rather than the project directory, so the `__mocks__` folder vitest
+    // resolves relative to the root is the `src/__mocks__` one the test doubles
+    // below live in. Without it, a bare `vi.mock('firebase/functions')`
+    // auto-mocks the real module instead, and every factory comes back
+    // `undefined`.
+    root: join(import.meta.dirname, 'src'),
+    setupFiles: ['./__test__/setup/vi.setup.ts'],
+    server: { deps: { inline: ['getsetdel', 'firebase-kit-client'] } },
   },
 })
 ```
 
-Without that `inline` entry, `getsetdel`'s own `import 'idb-keyval'` resolves
-natively and never sees the mock, and every cached read fails with
-`ReferenceError: indexedDB is not defined`.
+With either `inline` entry missing, the chain leaves vitest's module graph before
+the mock applies, `idb-keyval` resolves natively, and every cached read fails
+with `ReferenceError: indexedDB is not defined`.
 
 ## Requirements
 
