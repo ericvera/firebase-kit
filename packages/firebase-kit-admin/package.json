@@ -75,7 +75,7 @@
     "firebase-functions": "^7.2.5",
     "firebase-tools": "15.26.0",
     "firestore-snapshot-utils": "^3.0.1",
-    "scdate-testing": "^7.0.0",
+    "scdate-testing": "^7.1.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
