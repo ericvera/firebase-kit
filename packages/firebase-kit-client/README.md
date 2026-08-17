@@ -38,7 +38,7 @@ default app. The callable layer has no such constraint — it takes a
 - **Timestamps survive the wire**: `Timestamp` instances are rebuilt from the
   plain `{ seconds, nanoseconds }` objects a JSON round trip leaves behind, for
   both the full and the lite Firestore SDKs
-- **Test doubles included**: In-memory stand-ins for `firebase/app` and
+- **Test doubles included**: In-memory mocks for `firebase/app` and
   `firebase/functions`, shipped as a published entry point
 
 ## Installation
@@ -51,36 +51,53 @@ yarn add firebase-kit-client
 
 ### Peer dependencies
 
-npm will not install these for you. Add them yourself:
+Neither npm nor Yarn installs these for you. Add them yourself:
 
 ```bash
-npm install firebase 'getsetdel@^3.0.0'
+npm install firebase getsetdel
+# or
+yarn add firebase getsetdel
 ```
+
+The supported version range for each is declared in this package's
+`peerDependencies`, which is the authoritative source — npm fails the install
+when it is unsatisfied and Yarn warns, so the ranges are deliberately not
+duplicated here. To read them: `npm info firebase-kit-client peerDependencies`.
 
 **Required**
 
-- **`firebase`** (`^12.17.1`) — the Firebase JS SDK. Loaded through dynamic
-  imports, so the Functions and Firestore SDKs stay out of your initial bundle.
-- **`getsetdel`** (`^3.0.0`) — the IndexedDB store the cached Firestore reads
-  persist through.
+- **`firebase`** — the Firebase JS SDK. Loaded through dynamic imports, so the
+  Functions and Firestore SDKs stay out of your initial bundle.
+- **`getsetdel`** — the IndexedDB store the cached Firestore reads persist
+  through.
 
 **Optional**
 
-- **`vitest`** (`^4.1.10`) — needed only by `firebase-kit-client/mocks`. Skip it
-  if you do not install the test doubles; nothing on the production entry points
-  imports it.
+- **`vitest`** — needed only by `firebase-kit-client/mocks`. Skip it if you do
+  not install the test doubles; nothing on the production entry points imports
+  it.
 
 Cached Firestore reads need an IndexedDB implementation. A browser has one; a
-Node test run does not — `getsetdel` ships an in-memory stand-in for
-`idb-keyval`, its own IndexedDB dependency, so mock that from your vitest setup
-file and leave `getsetdel` itself real:
+Node test run does not — `getsetdel` ships an in-memory mock for `idb-keyval`,
+its own IndexedDB dependency, so mock that and leave `getsetdel` itself real.
+It goes in `__mocks__` alongside your other mocked modules, and since
+`getsetdel` ships the replacement the shim is a pure re-export:
+
+```typescript
+// src/__mocks__/idb-keyval/index.ts
+export * from 'getsetdel/testing/idb-keyval'
+```
+
+Activate it once from your setup file. The `vi.mock` call is required even
+though the shim exists: unlike Jest, vitest never applies a `__mocks__` folder
+to a node_modules package on its own.
 
 ```typescript
 // src/__test__/setup/vi.setup.ts
 import { testClearMockIndexedDB } from 'getsetdel/testing/idb-keyval'
 import { beforeEach, vi } from 'vitest'
 
-vi.mock('idb-keyval', async () => import('getsetdel/testing/idb-keyval'))
+vi.mock('idb-keyval')
 
 // The backend holds its data in module scope, so clear it between cases.
 beforeEach(() => {
@@ -482,7 +499,7 @@ export const reviveStoredSpace = (stored: StoredSpace): Promise<StoredSpace> =>
 
 ### `firebase-kit-client/mocks`
 
-Two factories, each building the stand-in a vitest suite re-exports from a
+Two factories, each building the mock a vitest suite re-exports from a
 `__mocks__` module so that a bare `vi.mock('…')` picks it up. Each is called once
 at module scope, so every importer shares one registry.
 
@@ -512,7 +529,7 @@ const mock = createFirebaseFunctionsClientMock()
 export const { getFunctions, httpsCallable, resetFunctionsMocks } = mock
 ```
 
-The third stand-in comes from `getsetdel` itself rather than from this package.
+The third mock comes from `getsetdel` itself rather than from this package.
 `createGetSetDelMock` delegates to the real store — running against the
 in-memory `idb-keyval` backend the setup file above installs — so a test asserts
 on what was actually stored. What it adds is what a suite cannot provoke from
@@ -635,7 +652,7 @@ real modules do not declare them.
 - **`createFirebaseAppMock()`**: `{ getApp, getApps, initializeApp, resetFirebaseAppMocks }`.
 - **`createFirebaseFunctionsClientMock()`**: `{ getFunctions, httpsCallable, resetFunctionsMocks }`.
 
-For the `getsetdel` stand-in, use `createGetSetDelMock` from `getsetdel/testing`
+For the `getsetdel` mock, use `createGetSetDelMock` from `getsetdel/testing`
 — it is `getsetdel`'s own API, not this package's.
 
 ## License

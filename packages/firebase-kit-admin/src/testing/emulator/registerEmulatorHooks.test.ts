@@ -3,16 +3,16 @@ import { getInitializeAppOptions } from '../../__mocks__/firebase-admin/app/inde
 import { stubFetch } from '../../__test__/utils/stubFetch.js'
 import { registerEmulatorHooks } from './registerEmulatorHooks.js'
 
-interface HooksTestState {
-  /** How many times the app's own reset ran. */
-  resets: number
-}
-
 const state = vi.hoisted((): HooksTestState => ({
   resets: 0,
 }))
 
 vi.mock('firebase-admin/app')
+
+interface HooksTestState {
+  /** How many times the app's own reset ran. */
+  resets: number
+}
 
 vi.stubEnv('VITEST_POOL_ID', '')
 

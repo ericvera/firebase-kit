@@ -7,10 +7,6 @@ import { createRunTransaction } from './createRunTransaction.js'
 
 vi.mock('firebase-admin/app')
 
-// Registered once at module scope: `getFirestore` is called lazily inside each
-// case and throws unless the shared registry already holds an app.
-initializeApp()
-
 vi.mock('firebase-admin/firestore', () => ({
   initializeFirestore: () => ({
     settings: () => undefined,
@@ -20,6 +16,10 @@ vi.mock('firebase-admin/firestore', () => ({
       updateFunction({ name: 'test-transaction' }),
   }),
 }))
+
+// Registered once at module scope: `getFirestore` is called lazily inside each
+// case and throws unless the shared registry already holds an app.
+initializeApp()
 
 it('hands the callback a reader and a writer and returns its value', async () => {
   // Built per case rather than at module scope: `getFirestore` caches the

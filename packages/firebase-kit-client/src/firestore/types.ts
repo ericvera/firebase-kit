@@ -1,7 +1,7 @@
 /**
  * @fileoverview Public types of the client-side Firestore access layer — the
  * option bags each utility takes, the cache shapes they persist, and the
- * structural stand-ins for the app types they used to borrow.
+ * structural substitutes for the app types they used to borrow.
  */
 
 import type { DocumentData, Query } from 'firebase/firestore'

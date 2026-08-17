@@ -5,16 +5,16 @@ import { createGetFirestore } from './createGetFirestore.js'
 
 vi.mock('firebase-admin/app')
 
-// Registered once at module scope: `getFirestore` is called lazily inside each
-// case and throws unless the shared registry already holds an app.
-initializeApp()
-
 vi.mock('firebase-admin/firestore', () => ({
   initializeFirestore: () => ({
     settings: () => undefined,
     collection: (name: string) => ({ path: name }),
   }),
 }))
+
+// Registered once at module scope: `getFirestore` is called lazily inside each
+// case and throws unless the shared registry already holds an app.
+initializeApp()
 
 const getFirestore = createGetFirestore({
   databaseId: 'test-db-id',

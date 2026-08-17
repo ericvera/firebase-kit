@@ -5,13 +5,6 @@ import { createTestFirestoreDependencies } from '../../__test__/utils/createTest
 import type { CachedDocument, FirestoreUtilsDependencies } from '../types.js'
 import { createGetDocWithCache } from './getDocWithCache.js'
 
-interface StoreState {
-  /** What the SDK read returns next; undefined means the doc is gone. */
-  remote: Record<string, unknown> | undefined
-  /** Store name for the running case, so cases cannot see each other's data. */
-  storeName: string
-}
-
 const state = vi.hoisted((): StoreState => ({
   remote: undefined,
   storeName: 'spaces',
@@ -20,6 +13,13 @@ const state = vi.hoisted((): StoreState => ({
 vi.mock('firebase/firestore/lite', () => ({
   getDoc: () => Promise.resolve({ data: () => state.remote }),
 }))
+
+interface StoreState {
+  /** What the SDK read returns next; undefined means the doc is gone. */
+  remote: Record<string, unknown> | undefined
+  /** Store name for the running case, so cases cannot see each other's data. */
+  storeName: string
+}
 
 const createDependencies = (): FirestoreUtilsDependencies =>
   createTestFirestoreDependencies({
@@ -31,6 +31,7 @@ const getRef = () => Promise.resolve({} as DocumentReference)
 const baseOptions = () => ({ id: 'space-1', name: state.storeName, getRef })
 
 /** Opens the same store the subject opens, to seed or read it back. */
+
 const openStore = (version = 0) =>
   createStore({ name: state.storeName, version: version + 8 })
 

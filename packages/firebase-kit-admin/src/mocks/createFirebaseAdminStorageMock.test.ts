@@ -111,7 +111,7 @@ it('falls back to placeholder content for a file that was never saved', async ()
     .file('documents/missing.yaml')
     .download()
 
-  // Verify: reading an unknown path yields a stand-in rather than throwing, so
+  // Verify: reading an unknown path yields a mock rather than throwing, so
   // a test that only cares about the call still runs
   expect(buffer.toString()).toEqual('test image data')
 })

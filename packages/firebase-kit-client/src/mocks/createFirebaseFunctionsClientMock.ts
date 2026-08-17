@@ -3,7 +3,7 @@ import type { HttpsCallableStreamResult } from 'firebase/functions'
 import { type Mock, vi } from 'vitest'
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase/functions` module, so a bare
  * `vi.mock('firebase/functions')` echoes the request payload back instead of
  * calling a deployed function. A payload carrying `throwInternal` or

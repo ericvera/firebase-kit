@@ -6,7 +6,7 @@ import type {
 } from 'firebase-admin/app'
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase-admin/app` module, so a bare
  * `vi.mock('firebase-admin/app')` gives tests an in-memory app registry
  * instead of a real Firebase app. Returns the module members the suite needs

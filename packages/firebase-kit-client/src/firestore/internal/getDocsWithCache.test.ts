@@ -25,19 +25,6 @@ import type {
 } from '../types.js'
 import { createGetDocsWithCache } from './getDocsWithCache.js'
 
-interface CollectionState {
-  /** Store name for the running case, so cases cannot see each other's data. */
-  storeName: string
-  /** Documents the SDK returns for the next query. */
-  remote: { id: string; data: Record<string, unknown> }[]
-  /** Whether getQuery or warmupQuery built the query that was run. */
-  queriedVia: string[]
-  /** The since-timestamp getQuery was called with. */
-  querySince: (FirestoreTimestamp | undefined)[]
-  /** Set to make the fetch fail instead of resolving. */
-  fetchError: Error | undefined
-}
-
 const state = vi.hoisted((): CollectionState => ({
   storeName: 'entries',
   remote: [],
@@ -68,6 +55,19 @@ vi.mock('firebase/firestore/lite', async () => {
     },
   }
 })
+
+interface CollectionState {
+  /** Store name for the running case, so cases cannot see each other's data. */
+  storeName: string
+  /** Documents the SDK returns for the next query. */
+  remote: { id: string; data: Record<string, unknown> }[]
+  /** Whether getQuery or warmupQuery built the query that was run. */
+  queriedVia: string[]
+  /** The since-timestamp getQuery was called with. */
+  querySince: (FirestoreTimestamp | undefined)[]
+  /** Set to make the fetch fail instead of resolving. */
+  fetchError: Error | undefined
+}
 
 const createDependencies = (): FirestoreUtilsDependencies =>
   createTestFirestoreDependencies({

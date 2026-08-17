@@ -8,7 +8,7 @@ export interface MockUserRecord {
 }
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase-admin/auth` module, so a bare
  * `vi.mock('firebase-admin/auth')` reads users out of an in-memory directory
  * instead of Firebase Auth.

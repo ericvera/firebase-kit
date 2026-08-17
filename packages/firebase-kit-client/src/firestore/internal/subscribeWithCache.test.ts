@@ -21,15 +21,6 @@ import type {
 } from '../types.js'
 import { createSubscribeWithCache } from './subscribeWithCache.js'
 
-interface CacheState {
-  /** Store name for the running case, so cases cannot see each other's data. */
-  storeName: string
-  /** Documents the warmup query returns. */
-  warmup: { id: string; data: DocumentData }[]
-  /** Handler the listener registered, so a test can push a snapshot. */
-  onNext: ((snapshot: unknown) => void) | undefined
-}
-
 const state = vi.hoisted((): CacheState => ({
   storeName: 'entries',
   warmup: [],
@@ -59,6 +50,15 @@ vi.mock('firebase/firestore', async () => {
     },
   }
 })
+
+interface CacheState {
+  /** Store name for the running case, so cases cannot see each other's data. */
+  storeName: string
+  /** Documents the warmup query returns. */
+  warmup: { id: string; data: DocumentData }[]
+  /** Handler the listener registered, so a test can push a snapshot. */
+  onNext: ((snapshot: unknown) => void) | undefined
+}
 
 const createDependencies = (): FirestoreUtilsDependencies =>
   createTestFirestoreDependencies({

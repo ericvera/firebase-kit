@@ -1,7 +1,7 @@
 import type { FirebaseFunctionsParamsMockOptions } from './types.js'
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase-functions/params` module, so a bare
  * `vi.mock('firebase-functions/params')` resolves secrets to fixtures instead
  * of reaching Secret Manager, and resolves strings from `process.env`.
