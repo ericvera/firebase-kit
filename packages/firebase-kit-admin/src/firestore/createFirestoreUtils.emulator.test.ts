@@ -1,4 +1,3 @@
-import { normalizeData } from 'firestore-snapshot-utils'
 import { beforeEach, expect, it } from 'vitest'
 import {
   addEntryToDB,
@@ -9,6 +8,7 @@ import {
   TestSpaceID1,
 } from '../__test__/db/index.js'
 import { setFakeTimer } from '../__test__/utils/setFakeTimer.js'
+import { normalizeData } from '../testing/normalizeData.js'
 
 let now = 0
 

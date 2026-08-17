@@ -1,5 +1,4 @@
 import type { Query, QueryDocumentSnapshot } from 'firebase-admin/firestore'
-import { getDBSnapshot as utilGetDBSnapshot } from 'firestore-snapshot-utils'
 
 /**
  * A ref object that can hand back a query over its whole collection. Accepted
@@ -30,5 +29,7 @@ export const getDBSnapshot = async (
     isTestableDBRef(input) ? input.testAllQuery() : input,
   )
 
-  return utilGetDBSnapshot(queries)
+  const results = await Promise.all(queries.map((query) => query.get()))
+
+  return results.flatMap((result) => result.docs)
 }

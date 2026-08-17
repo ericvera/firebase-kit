@@ -1,7 +1,7 @@
 import type { Timestamp } from 'firebase-admin/firestore'
 
 /**
- * Document shape of the `spaces` collection — the stand-in this package's
+ * Document shape of the `spaces` collection — the sample this package's
  * emulator tests use wherever a consuming app would have one of its own
  * top-level entities. Deliberately synthetic: nothing here mirrors a real
  * product schema.

@@ -2,7 +2,7 @@ import { type Mock, vi } from 'vitest'
 import type { FirebaseFunctionsMockOptions } from './types.js'
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase-functions` module, so a bare
  * `vi.mock('firebase-functions')` swaps the logger for spies while leaving the
  * function builders real.

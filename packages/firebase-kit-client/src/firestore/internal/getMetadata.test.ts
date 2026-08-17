@@ -3,8 +3,9 @@ import { expect, it } from 'vitest'
 import { FirestoreVariant } from '../constants.js'
 import { getMetadata } from './getMetadata.js'
 
-// No `getsetdel` mock: the setup file installs an in-memory IndexedDB, so the
-// real store runs and the assertions read what was actually written.
+// No `getsetdel` mock: the setup file mocks `idb-keyval` with an in-memory
+// backend, so the real store runs and the assertions read what was actually
+// written.
 // A fresh store per case, so one case's metadata cannot leak into the next.
 let storeCount = 0
 

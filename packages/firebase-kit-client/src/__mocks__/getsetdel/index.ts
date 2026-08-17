@@ -1,5 +1,5 @@
+import { createGetSetDelMock } from 'getsetdel/testing'
 import { vi } from 'vitest'
-import { createGetSetDelMock } from '../../testing/index.js'
 
 // NOTE: Called once at module scope so every importer shares one fault switch.
 const mock = createGetSetDelMock(
@@ -20,9 +20,11 @@ export const {
   GetSetDelResetError,
   handleResetError,
   keys,
+  queryInventory,
   resetGetSetDelMock,
   set,
   setMany,
   setMeta,
+  simulateStoreReset,
   stubStore,
 } = mock

@@ -1,55 +1,65 @@
-import type { Query } from 'firebase-admin/firestore'
+import type { Query, QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import { expect, it, vi } from 'vitest'
+import { createDocSnapshot } from '../__test__/utils/createDocSnapshot.js'
 import { getDBSnapshot } from './getDBSnapshot.js'
 
-const state = vi.hoisted(() => ({
-  /** Queries the underlying utility was handed, in call order. */
-  queried: [] as unknown[],
-}))
+const createQuery = (paths: string[]): Query =>
+  ({
+    get: () => ({
+      docs: paths.map((path) => createDocSnapshot({ path, data: {} })),
+    }),
+  }) as unknown as Query
 
-vi.mock('firestore-snapshot-utils', () => ({
-  getDBSnapshot: (queries: unknown) => {
-    state.queried.push(queries)
+const getPaths = (docs: QueryDocumentSnapshot[]) =>
+  docs.map((doc) => doc.ref.path)
 
-    return Promise.resolve([])
-  },
-}))
+it('reads a bare query', async () => {
+  const docs = await getDBSnapshot(createQuery(['entries/entry-1']))
 
-const createQuery = (name: string) => ({ name }) as unknown as Query
-
-it('passes a bare query straight through', async () => {
-  state.queried = []
-
-  const query = createQuery('entries')
-
-  await getDBSnapshot(query)
-
-  // Verify: a single query is wrapped into the list the utility expects, and
-  // reaches it untouched
-  expect(state.queried).toEqual([[query]])
+  // Verify: a single input is read without the caller wrapping it in an array
+  expect(getPaths(docs)).toEqual(['entries/entry-1'])
 })
 
 it('resolves a refs object to its all-documents query', async () => {
-  state.queried = []
+  const query = createQuery(['spaces/space-1'])
 
-  const query = createQuery('spaces')
-
-  await getDBSnapshot({ testAllQuery: () => query })
+  const docs = await getDBSnapshot({ testAllQuery: () => query })
 
   // Verify: the duck-type is unwrapped, so a suite can name its refs rather
   // than restating each collection's query
-  expect(state.queried).toEqual([[query]])
+  expect(getPaths(docs)).toEqual(['spaces/space-1'])
 })
 
-it('accepts refs and bare queries mixed in one call', async () => {
-  state.queried = []
+it('flattens refs and bare queries mixed in one call, in order', async () => {
+  const refsQuery = createQuery(['spaces/space-1', 'spaces/space-2'])
+  const bareQuery = createQuery(['entries/entry-1'])
 
-  const refsQuery = createQuery('spaces')
-  const bareQuery = createQuery('entries')
+  const docs = await getDBSnapshot([
+    { testAllQuery: () => refsQuery },
+    bareQuery,
+  ])
 
-  await getDBSnapshot([{ testAllQuery: () => refsQuery }, bareQuery])
+  // Verify: both shapes resolve in place and every query's documents land in
+  // one flat list, which is what a snapshot spanning several collections needs
+  expect(getPaths(docs)).toEqual([
+    'spaces/space-1',
+    'spaces/space-2',
+    'entries/entry-1',
+  ])
+})
 
-  // Verify: both shapes resolve in place and keep their order, which is what
-  // a snapshot spanning a parent collection and a subcollection needs
-  expect(state.queried).toEqual([[refsQuery, bareQuery]])
+it('reads every query it is given', async () => {
+  const first = createQuery(['entries/entry-1'])
+  const second = createQuery(['entries/entry-2'])
+  const firstGet = vi.spyOn(first, 'get')
+  const secondGet = vi.spyOn(second, 'get')
+
+  await getDBSnapshot([first, second])
+
+  expect(firstGet).toHaveBeenCalledTimes(1)
+  expect(secondGet).toHaveBeenCalledTimes(1)
+})
+
+it('returns an empty list for an empty input array', async () => {
+  expect(await getDBSnapshot([])).toEqual([])
 })

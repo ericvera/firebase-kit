@@ -1,4 +1,4 @@
-import { createFirebaseAppMock } from '../../../testing/index.js'
+import { createFirebaseAppMock } from '../../../mocks/index.js'
 
 // NOTE: Called once at module scope so every importer shares one app registry.
 const mock = createFirebaseAppMock()

@@ -21,9 +21,9 @@
     "./callable": "./dist/callable/index.js",
     "./connectivity": "./dist/connectivity/index.js",
     "./firestore": "./dist/firestore/index.js",
+    "./mocks": "./dist/mocks/index.js",
     "./rate-limit": "./dist/rate-limit/index.js",
     "./runtime": "./dist/runtime/index.js",
-    "./testing": "./dist/testing/index.js",
     "./package.json": "./package.json"
   },
   "sideEffects": false,
@@ -46,8 +46,8 @@
     "firebase-kit-protocol": "workspace:*"
   },
   "peerDependencies": {
-    "firebase": "^12.16.0",
-    "getsetdel": "^2.0.0",
+    "firebase": "^12.17.1",
+    "getsetdel": "^3.0.0",
     "vitest": "^4.1.10"
   },
   "peerDependenciesMeta": {
@@ -58,10 +58,9 @@
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
     "@types/node": "^24.13.3",
-    "eslint": "^10.8.0",
-    "fake-indexeddb": "^6.2.5",
-    "firebase": "^12.16.0",
-    "getsetdel": "^2.0.0",
+    "eslint": "^10.8.1",
+    "firebase": "^12.17.1",
+    "getsetdel": "^3.0.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },

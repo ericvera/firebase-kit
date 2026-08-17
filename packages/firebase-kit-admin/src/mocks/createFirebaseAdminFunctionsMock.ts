@@ -34,7 +34,7 @@ const rejectWithFailure = (failure: unknown): Promise<never> =>
   })
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase-admin/functions` module, so a bare
  * `vi.mock('firebase-admin/functions')` gives tests an in-memory Cloud Tasks
  * queue instead of a real one. Task ids are tracked across enqueues, so a

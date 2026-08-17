@@ -1,7 +1,22 @@
-// Installs an in-memory IndexedDB on `globalThis` before any test loads.
+import { testClearMockIndexedDB } from 'getsetdel/testing/idb-keyval'
+import { beforeEach, vi } from 'vitest'
+
+// Puts an in-memory IndexedDB behind the cache layer before any test loads,
+// using the shim in `src/__mocks__/idb-keyval`.
 //
 // The Firestore cache layer stores through `getsetdel`, which wraps
 // `idb-keyval`, which needs IndexedDB. Neither Node nor happy-dom provides one,
 // so without this every cached-read test would have to hand-write a fake store
 // and assert on what that fake recorded instead of on what was actually stored.
-import 'fake-indexeddb/auto'
+// Mocking the transitive dependency rather than `getsetdel` itself is what
+// leaves `getsetdel` real.
+//
+// The call is required even with the shim present: unlike Jest, vitest never
+// applies a `__mocks__` folder to a node_modules package on its own.
+vi.mock('idb-keyval')
+
+// The backend holds its data in module scope, and `mockReset` does not touch
+// it, so each case has to start from an empty store.
+beforeEach(() => {
+  testClearMockIndexedDB()
+})

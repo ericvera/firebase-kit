@@ -7,13 +7,13 @@ import type {
 } from '../errors/index.js'
 import { checkClaimsVersion } from './checkClaimsVersion.js'
 
+vi.mock('firebase-admin/auth')
+vi.mock('firebase-functions')
+
 interface TestClaims {
   v?: number
   role?: string
 }
-
-vi.mock('firebase-admin/auth')
-vi.mock('firebase-functions')
 
 const TestUid = 'some-uid'
 

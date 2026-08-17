@@ -5,5 +5,8 @@ export * from './expectSuccessResult.js'
 export * from './getDBChanges.js'
 export * from './getDBChangesDiff.js'
 export * from './getDBSnapshot.js'
+export * from './normalizeData.js'
 export * from './testGetFirestoreReset.js'
 export * from './types.js'
+
+export type * from './internal/DocumentChangeSnapshot.js'

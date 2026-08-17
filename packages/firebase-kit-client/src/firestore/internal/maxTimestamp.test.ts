@@ -3,7 +3,7 @@ import type { FirestoreTimestamp } from '../types.js'
 import { maxTimestamp } from './maxTimestamp.js'
 
 // Ordering is by `valueOf`, which is what both Firestore SDKs' Timestamp
-// returns a sortable string from — so the stand-in only has to be sortable the
+// returns a sortable string from — so the mock only has to be sortable the
 // same way.
 const createTimestamp = (seconds: number): FirestoreTimestamp => ({
   seconds,

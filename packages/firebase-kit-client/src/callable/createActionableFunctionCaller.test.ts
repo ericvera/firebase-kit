@@ -10,31 +10,6 @@ import type {
   RequestResponseMap,
 } from './types.js'
 
-type TestCommand = 'get-entry' | 'update-order'
-
-// Extends the map type rather than restating its shape: the rule against a
-// type alias here wants an interface, and an interface only satisfies the
-// caller's `TMap` constraint when it inherits the index signature.
-interface TestMap extends RequestResponseMap {
-  'get-entry': [
-    { entryId: string; note?: string | undefined },
-    { updated: unknown },
-  ]
-  'update-order': [{ entryId: string }, { updated: unknown }]
-}
-
-type TestCategory = 'default' | 'low-frequency'
-
-interface CallerTestState {
-  callableArguments: { name: string; options: unknown }[]
-  resolvedFunctions: unknown[]
-  callSequence: string[]
-  rateLimitChecks: { functionName: string; category: string }[]
-  responseData: unknown
-  rejection: Error | undefined
-  sentPayloads: unknown[]
-}
-
 const state = vi.hoisted((): CallerTestState => ({
   callableArguments: [],
   resolvedFunctions: [],
@@ -67,6 +42,31 @@ vi.mock('firebase/functions', () => ({
   },
 }))
 
+type TestCommand = 'get-entry' | 'update-order'
+
+// Extends the map type rather than restating its shape: the rule against a
+// type alias here wants an interface, and an interface only satisfies the
+// caller's `TMap` constraint when it inherits the index signature.
+interface TestMap extends RequestResponseMap {
+  'get-entry': [
+    { entryId: string; note?: string | undefined },
+    { updated: unknown },
+  ]
+  'update-order': [{ entryId: string }, { updated: unknown }]
+}
+
+type TestCategory = 'default' | 'low-frequency'
+
+interface CallerTestState {
+  callableArguments: { name: string; options: unknown }[]
+  resolvedFunctions: unknown[]
+  callSequence: string[]
+  rateLimitChecks: { functionName: string; category: string }[]
+  responseData: unknown
+  rejection: Error | undefined
+  sentPayloads: unknown[]
+}
+
 const createDependencies = (
   overrides: Partial<ActionableFunctionCallerDependencies<TestCategory>> = {},
 ): ActionableFunctionCallerDependencies<TestCategory> => ({
@@ -86,7 +86,7 @@ const createDependencies = (
   ...overrides,
 })
 
-// Structural stand-ins rather than real SDK instances: the subject only ever
+// Structural mocks rather than real SDK instances: the subject only ever
 // passes them along, so nothing here is ever called.
 const hostApp: FirebaseApp = {
   name: 'host-app',

@@ -18,7 +18,11 @@ Vitest. Tests are colocated with their source as `src/<name>.test.ts`. Tests
 needing a live Firestore/Auth emulator are named `src/<name>.emulator.test.ts`
 and run as a separate vitest project via `firebase emulators:exec` against
 project `demo-admin-tests`. Shared fixtures live in `src/__test__/`, module
-shims in `src/__mocks__/`. Every vitest project sets `mockReset: true`.
+shims in `src/__mocks__/<module>/index.ts` — including for third-party packages
+and their transitive dependencies; never inline a `vi.mock` factory in the setup
+file. vitest does not auto-apply a `__mocks__` folder to a node_modules package,
+so each such module still needs a bare `vi.mock('<module>')` call in
+`src/__test__/setup/vi.setup.ts`. Every vitest project sets `mockReset: true`.
 
 ## Test exceptions
 

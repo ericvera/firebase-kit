@@ -5,12 +5,6 @@ import type { FirestoreUtilsDependencies } from '../types.js'
 import { FirestorePermissionDeniedCode } from './constants.js'
 import { createSubscribe } from './subscribe.js'
 
-interface DocChange {
-  type: 'added' | 'modified' | 'removed'
-  id: string
-  data: Record<string, unknown>
-}
-
 const state = vi.hoisted(() => ({
   /** Handlers the SDK captured for the current listener. */
   onNext: undefined as ((snapshot: unknown) => void) | undefined,
@@ -39,6 +33,12 @@ vi.mock('firebase/firestore', () => ({
     }
   },
 }))
+
+interface DocChange {
+  type: 'added' | 'modified' | 'removed'
+  id: string
+  data: Record<string, unknown>
+}
 
 const createDependencies = (): FirestoreUtilsDependencies =>
   createTestFirestoreDependencies()

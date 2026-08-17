@@ -11,7 +11,7 @@ interface FileRecord {
 }
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase-admin/storage` module, so a bare
  * `vi.mock('firebase-admin/storage')` gives tests an in-memory bucket instead
  * of a real Cloud Storage one. Returns the module members the suite needs, the

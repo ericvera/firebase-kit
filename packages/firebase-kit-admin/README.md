@@ -43,7 +43,7 @@ neither side's call sites carry configuration.
 - **Emulator testing in one line**: `registerEmulatorHooks` initializes the app
   and installs the hooks that keep concurrent test files, workers and checkouts
   out of each other's data
-- **Test doubles included**: In-memory stand-ins for `firebase-admin/app`,
+- **Test doubles included**: In-memory mocks for `firebase-admin/app`,
   `/auth`, `/firestore`, `/functions`, `/storage`, and for `firebase-functions`
   and its params module
 
@@ -57,36 +57,42 @@ yarn add firebase-kit-admin
 
 ### Peer dependencies
 
-npm will not install these for you. Add them yourself:
+Neither npm nor Yarn installs these for you. Add them yourself:
 
 ```bash
 npm install firebase-admin firebase-functions betterbe
+# or
+yarn add firebase-admin firebase-functions betterbe
 ```
+
+The supported version range for each is declared in this package's
+`peerDependencies`, which is the authoritative source — npm fails the install
+when it is unsatisfied and Yarn warns, so the ranges are deliberately not
+duplicated here. To read them: `npm info firebase-kit-admin peerDependencies`.
 
 **Required**
 
-- **`firebase-admin`** (`^13.10.0`) — the Admin SDK. Used by the root entry
-  point, `./auth`, `./firestore`, `./tasks` and `./testing`.
-- **`firebase-functions`** (`^7.2.5`) — used by `./auth`, `./callable`,
-  `./errors`, `./firestore`, `./tasks` and `./validation`. `HttpsError` is the
-  base of every error class here.
-- **`betterbe`** (`^4.1.0`) — the schema validator `./validation` imports at
-  runtime. Required rather than optional: `./validation` is a production entry
-  point, so a project that installs this package without `betterbe` will fail at
-  import time if it uses it.
+- **`firebase-admin`** — the Admin SDK. Used by the root entry point, `./auth`,
+  `./firestore`, `./tasks` and `./testing`.
+- **`firebase-functions`** — used by `./auth`, `./callable`, `./errors`,
+  `./firestore`, `./tasks` and `./validation`. `HttpsError` is the base of every
+  error class here.
+- **`betterbe`** — the schema validator `./validation` imports at runtime.
+  Required rather than optional: `./validation` is a production entry point, so a
+  project that installs this package without `betterbe` will fail at import time
+  if it uses it.
 
 **Optional**
 
-- **`firestore-snapshot-utils`** (`^3.0.1`) — needed only by
-  `firebase-kit-admin/testing`, which builds the before/after DB snapshots and
-  the printable diff on top of it.
-- **`vitest`** (`^4.1.10`) — needed only by `firebase-kit-admin/testing` and
+- **`vitest`** — needed only by `firebase-kit-admin/testing` and
   `firebase-kit-admin/mocks`. Nothing on the production entry points imports it.
 
-Install both if you use the test harness:
+Install it if you use the test harness:
 
 ```bash
-npm install --save-dev firestore-snapshot-utils vitest
+npm install --save-dev vitest
+# or
+yarn add --dev vitest
 ```
 
 ## Requirements
@@ -106,7 +112,7 @@ npm install --save-dev firestore-snapshot-utils vitest
 | `firebase-kit-admin/callable`   | `createAPIVersionCheck`, `createOnCallGlobalOptions` and `parseCallableRequest` for grouped callables                                                               |
 | `firebase-kit-admin/errors`     | The `HttpsError` subclasses (`internal`, `unauthenticated`, `permission-denied`, `failed-precondition`, `invalid-argument`) plus `getErrorCode` / `getErrorMessage` |
 | `firebase-kit-admin/firestore`  | `createFirestoreUtils` — ref builders, `runBatch`, `runTransaction` — plus `checkDocumentExists` and `checkDocumentInQueryExists`                                   |
-| `firebase-kit-admin/mocks`      | Factories for the in-memory `firebase-admin` / `firebase-functions` stand-ins a vitest suite installs in `__mocks__`                                                |
+| `firebase-kit-admin/mocks`      | Factories for the in-memory `firebase-admin` / `firebase-functions` mocks a vitest suite installs in `__mocks__`                                                    |
 | `firebase-kit-admin/runtime`    | `getRuntimeContext`, `inEmulator` and `checkInTestEnvironment`: where this process is actually running                                                              |
 | `firebase-kit-admin/tasks`      | `createTaskEnqueuer` — Cloud Tasks enqueueing that skips in the emulator and tolerates a duplicate id                                                               |
 | `firebase-kit-admin/testing`    | Request builders, DB snapshot/diff helpers, `expectSuccessResult`, and `registerEmulatorHooks`                                                                      |
@@ -544,7 +550,7 @@ environment, so it cannot be shipped by accident).
 
 ### `firebase-kit-admin/mocks`
 
-Factories for the in-memory stand-ins a vitest suite re-exports from its
+Factories for the in-memory mocks a vitest suite re-exports from its
 `__mocks__` modules, so that a bare `vi.mock('firebase-admin/app')` picks them up.
 Each is called once at module scope, so every importer shares one state.
 
@@ -711,9 +717,15 @@ from `process.env`) follow the same shape.
   directly.
 - **`getDBSnapshot(inputs)`**, **`getDBChanges(before, after, masks?)`**,
   **`getDBChangesDiff(changes)`**: The before/after snapshot and printable diff.
+- **`normalizeData(data, options?)`**: Replaces Firestore Timestamps with
+  `/Timestamp XXXX/` (indexed in chronological order) and Buffers with
+  `/Buffer <base64url>/`, so a snapshot assertion stays stable across runs.
 - **`expectSuccessResult(response)`**, **`testGetFirestoreReset()`**.
 - **`EmulatorHooksOptions`**, **`EmulatorReset`**, **`RequestBuildersOptions`**,
-  **`TestableDBRef`**, **`SnapshotInput`**.
+  **`TestableDBRef`**, **`SnapshotInput`**, **`NormalizeDataOptions`**,
+  **`DBSnapshotChanges`**, **`AddedDocumentSnapshot`**,
+  **`RemovedDocumentSnapshot`**, **`ModifiedDocumentSnapshot`**,
+  **`UnmodifiedDocumentSnapshot`**.
 
 ### `firebase-kit-admin/validation`
 

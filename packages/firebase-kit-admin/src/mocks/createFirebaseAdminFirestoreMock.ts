@@ -25,7 +25,7 @@ interface MockFirestoreInstance {
 }
 
 /**
- * Builds the stand-in a test suite re-exports from its
+ * Builds the mock a test suite re-exports from its
  * `__mocks__/firebase-admin/firestore` module, so a bare
  * `vi.mock('firebase-admin/firestore')` hands tests a chainable query surface
  * that never reaches Firestore. Returns the faked `getFirestore` /
