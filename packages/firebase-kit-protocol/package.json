@@ -1,6 +1,6 @@
 {
   "name": "firebase-kit-protocol",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Shared callable-function contract for firebase-kit: request and response types, API versioning, and the error codes that cross the wire.",
   "keywords": [
     "firebase",
