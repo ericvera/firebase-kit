@@ -54,9 +54,9 @@
   },
   "peerDependencies": {
     "betterbe": "^4.1.0",
-    "firebase-admin": "^14.2.0",
+    "firebase-admin": "^14.3.0",
     "firebase-functions": "^7.3.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "peerDependenciesMeta": {
     "vitest": {
@@ -68,12 +68,12 @@
     "@types/node": "^24.13.3",
     "betterbe": "^4.1.0",
     "eslint": "^10.8.1",
-    "firebase-admin": "^14.2.0",
+    "firebase-admin": "^14.3.0",
     "firebase-functions": "^7.3.2",
-    "firebase-tools": "15.26.0",
+    "firebase-tools": "15.28.1",
     "scdate-testing": "^7.1.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "repository": {
     "type": "git",
