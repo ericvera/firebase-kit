@@ -48,7 +48,7 @@
   "peerDependencies": {
     "firebase": "^12.18.0",
     "getsetdel": "^3.0.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "peerDependenciesMeta": {
     "vitest": {
@@ -62,7 +62,7 @@
     "firebase": "^12.18.0",
     "getsetdel": "^3.0.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "repository": {
     "type": "git",
