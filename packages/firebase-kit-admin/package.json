@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "firebase-kit-protocol": "workspace:*",
-    "jest-diff": "^30.4.1"
+    "jest-diff": "^30.5.1"
   },
   "peerDependencies": {
     "betterbe": "^4.1.0",
