@@ -65,12 +65,12 @@
   },
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24.13.3",
+    "@types/node": "^24.13.4",
     "betterbe": "^4.1.0",
-    "eslint": "^10.9.1",
+    "eslint": "^10.10.0",
     "firebase-admin": "^14.3.0",
     "firebase-functions": "^7.3.2",
-    "firebase-tools": "15.28.1",
+    "firebase-tools": "15.30.0",
     "scdate-testing": "^7.1.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
