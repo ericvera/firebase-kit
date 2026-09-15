@@ -2,6 +2,7 @@
 
 Mise directory: .mise/
 Branch convention: feat/<slug> for features, fix/<slug> for bug fixes
+Checklist: .claude/mise-checklist.md
 Ship: merge (squash)
 
 ## Quality commands
@@ -21,8 +22,12 @@ project `demo-admin-tests`. Shared fixtures live in `src/__test__/`, module
 shims in `src/__mocks__/<module>/index.ts` — including for third-party packages
 and their transitive dependencies; never inline a `vi.mock` factory in the setup
 file. vitest does not auto-apply a `__mocks__` folder to a node_modules package,
-so each such module still needs a bare `vi.mock('<module>')` call in
-`src/__test__/setup/vi.setup.ts`. Every vitest project sets `mockReset: true`.
+so each test file that wants the shim calls a bare `vi.mock('<module>')`
+itself. `vi.setup.ts` carries that call only for a shim every test in the
+project needs, like `idb-keyval`. Every vitest project sets `mockReset: true`,
+which restores the implementation a shim handed to `vi.fn(actual.x)`, so a
+shim spy needs no per-test re-arming, while a test that installs its own fake
+must do it in `beforeEach` rather than at module scope.
 
 ## Test exceptions
 

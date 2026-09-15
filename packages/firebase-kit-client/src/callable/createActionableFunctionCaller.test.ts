@@ -1,7 +1,8 @@
 import type { FirebaseApp } from 'firebase/app'
 import { Timestamp } from 'firebase/firestore'
 import { Timestamp as LiteTimestamp } from 'firebase/firestore/lite'
-import type { Functions } from 'firebase/functions'
+import type { Functions, HttpsCallable } from 'firebase/functions'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createActionableFunctionCaller } from './createActionableFunctionCaller.js'
 import type {
@@ -20,27 +21,9 @@ const state = vi.hoisted((): CallerTestState => ({
   sentPayloads: [],
 }))
 
-// The subject reaches the Functions SDK through a dynamic import inside the
-// call, so this factory has to be in place before the call rather than before
-// the module loads.
-vi.mock('firebase/functions', () => ({
-  getFunctions: (app: unknown) => ({ resolvedFrom: app }),
-  httpsCallable: (functions: unknown, name: string, options: unknown) => {
-    state.callableArguments.push({ name, options })
-    state.resolvedFunctions.push(functions)
-
-    return (data: unknown) => {
-      state.callSequence.push('callable')
-      state.sentPayloads.push(data)
-
-      if (state.rejection !== undefined) {
-        return Promise.reject(state.rejection)
-      }
-
-      return Promise.resolve({ data: state.responseData })
-    }
-  },
-}))
+// The shim in `src/__mocks__/firebase/functions` carries the spies this suite
+// drives, which vitest applies to a node_modules package only on request.
+vi.mock('firebase/functions')
 
 type TestCommand = 'get-entry' | 'update-order'
 
@@ -120,6 +103,8 @@ const createCallWithDependencies = (
     'default',
   )
 
+// The implementations are installed per test rather than once at module
+// scope, because `mockReset` puts the shim's real ones back before every test.
 beforeEach(() => {
   state.callableArguments = []
   state.resolvedFunctions = []
@@ -128,6 +113,32 @@ beforeEach(() => {
   state.responseData = {}
   state.rejection = undefined
   state.sentPayloads = []
+
+  // Structural rather than a real instance, so the cases below can assert on
+  // which app the lookup received.
+  vi.mocked(getFunctions).mockImplementation(
+    (app) => ({ resolvedFrom: app }) as unknown as Functions,
+  )
+
+  vi.mocked(httpsCallable).mockImplementation((functions, name, options) => {
+    state.callableArguments.push({ name, options })
+    state.resolvedFunctions.push(functions)
+
+    const callable = (data: unknown) => {
+      state.callSequence.push('callable')
+      state.sentPayloads.push(data)
+
+      if (state.rejection !== undefined) {
+        return Promise.reject(state.rejection)
+      }
+
+      return Promise.resolve({ data: state.responseData })
+    }
+
+    // Cast because the fake answers the call signature only, and the cases
+    // below never reach for the SDK's `stream` companion.
+    return callable as unknown as HttpsCallable
+  })
 })
 
 it('sends the payload with the action and the bound API version', async () => {

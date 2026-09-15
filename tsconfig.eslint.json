@@ -5,7 +5,10 @@
   "compilerOptions": {
     // Required for eslint.config.mjs to be included in the program for typed
     // linting (TypeScript only pulls .mjs/.js files in when allowJs is set).
-    "allowJs": true
+    "allowJs": true,
+    // The config files import `node:path` and read `import.meta.dirname`,
+    // which only resolve with the Node types in the program.
+    "types": ["node"]
   },
   "include": [
     "eslint.config.mjs",

@@ -27,6 +27,9 @@ default app. The callable layer has no such constraint — it takes a
 
 - **Response types follow the action**: `await callSpaces('get-space', { … })` is
   typed from the group's command map, not cast at the call site
+- **Requests that outlive the page**: A keepalive caller sends the callable
+  request with `keepalive: true`, so a tap that navigates away does not cancel
+  the call it just made
 - **One budget across groups**: A rate limiter is bound once and shared, so a
   runaway watcher throws before the call leaves the browser instead of burning
   quota
@@ -143,15 +146,15 @@ with `ReferenceError: indexedDB is not defined`.
 
 ## Entry Points
 
-| Entry point                        | What it provides                                                                                                                                                        |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `firebase-kit-client`              | `getErrorWithCode`, which unwraps a thrown value down to the first `code` it carries, and the `CreateErrorFunction` the rest of the package builds fatal errors through |
-| `firebase-kit-client/callable`     | `createActionableFunctionCaller` — one typed caller per callable group — and `toActionableError`                                                                        |
-| `firebase-kit-client/connectivity` | `ConnectionStatus`, `ConnectivityError`, and `withConnectivityHandling`, which turns a failed backend call into a resolved connectivity state                           |
-| `firebase-kit-client/firestore`    | `createFirestoreUtils` — plain reads, cached reads, cursor paging and cached subscriptions — plus `reviveTimestamps` and `FirestoreVariant`                             |
-| `firebase-kit-client/mocks`        | `createFirebaseAppMock` and `createFirebaseFunctionsClientMock` — the factories a vitest suite re-exports from its `__mocks__` modules                                  |
-| `firebase-kit-client/rate-limit`   | `createRateLimiter` and `RateLimitError`: a sliding-window guard that throws before a call leaves the browser                                                           |
-| `firebase-kit-client/runtime`      | `getHostingEnvironment`, which reports `Local` or `Live` from the hostname alone                                                                                        |
+| Entry point                        | What it provides                                                                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `firebase-kit-client`              | `getErrorWithCode`, which unwraps a thrown value down to the first `code` it carries, and the `CreateErrorFunction` the rest of the package builds fatal errors through                                       |
+| `firebase-kit-client/callable`     | `createActionableFunctionCaller` — one typed caller per callable group — `createKeepaliveFunctionCaller` (fire-and-forget, sent with `keepalive: true`) and its `KeepaliveCallError`, and `toActionableError` |
+| `firebase-kit-client/connectivity` | `ConnectionStatus`, `ConnectivityError`, and `withConnectivityHandling`, which turns a failed backend call into a resolved connectivity state                                                                 |
+| `firebase-kit-client/firestore`    | `createFirestoreUtils` — plain reads, cached reads, cursor paging and cached subscriptions — plus `reviveTimestamps` and `FirestoreVariant`                                                                   |
+| `firebase-kit-client/mocks`        | `createFirebaseAppMock` and `createFirebaseFunctionsClientMock` — the factories a vitest suite re-exports from its `__mocks__` modules                                                                        |
+| `firebase-kit-client/rate-limit`   | `createRateLimiter` and `RateLimitError`: a sliding-window guard that throws before a call leaves the browser                                                                                                 |
+| `firebase-kit-client/runtime`      | `getHostingEnvironment`, which reports `Local` or `Live` from the hostname alone                                                                                                                              |
 
 ## Usage
 
@@ -384,6 +387,121 @@ export const renameSpace = async (
 }
 ```
 
+#### Fire-and-forget calls with `createKeepaliveFunctionCaller`
+
+`createKeepaliveFunctionCaller` sends the callable request over `fetch` with
+`keepalive: true` and never awaits it. The browser finishes the request after
+the document is gone, so a tap that navigates the page away (a shared link, a
+form submit, a closed tab) does not cancel it. `httpsCallable` cannot set that
+flag.
+
+It takes the same kind of command map, so one group can have both callers. Its
+dependencies carry the same `checkRateLimit` budget as the actionable caller,
+and no connectivity policy or error factory. Every failure it can still reach
+goes to `onError`, and the call itself never throws.
+
+The caller reads only public SDK surface, so the app hands it the collaborators
+`httpsCallable` finds on its own.
+
+```typescript
+// src/firebase/trackSpaces.ts
+import { createKeepaliveFunctionCaller } from 'firebase-kit-client/callable'
+import type {
+  KeepaliveFunctionCallerDependencies,
+  RequestResponseMap,
+} from 'firebase-kit-client/callable'
+import { getAuth } from 'firebase/auth'
+import { checkRateLimit } from './rateLimit.js'
+import type { RateLimitCategory } from './rateLimit.js'
+
+const CurrentAPIVersion = 7
+
+type TrackingCommand = 'space-opened' | 'link-followed'
+
+interface TrackingMap extends RequestResponseMap {
+  'space-opened': [{ spaceId: string }, void]
+  'link-followed': [{ spaceId: string; url: string }, void]
+}
+
+const dependencies: KeepaliveFunctionCallerDependencies<RateLimitCategory> = {
+  currentAPIVersion: CurrentAPIVersion,
+  checkRateLimit,
+  // undefined binds the default app and the default region.
+  firebaseApp: undefined,
+  // Set this instead for a non-default region or a custom domain.
+  functions: undefined,
+  // getAuth initializes Auth when the app has not, so an app that calls
+  // initializeAuth passes that instance here instead. undefined sends the
+  // call with no Authorization header.
+  auth: getAuth(),
+  // Pass the App Check instance the app already initialized. undefined sends
+  // the call with no X-Firebase-AppCheck header.
+  appCheck: undefined,
+  // undefined sends to the deployed functions. Pass the same host and port
+  // given to connectFunctionsEmulator, and pass them here as well when the
+  // emulator comes from __FIREBASE_DEFAULTS__.
+  emulator: undefined,
+}
+
+export const trackSpaces = createKeepaliveFunctionCaller<
+  TrackingCommand,
+  TrackingMap,
+  RateLimitCategory
+>(dependencies, 'tracking', 'default', {
+  rateLimitMap: { 'link-followed': 'expensive' },
+  // The only place a failure surfaces. Leaving it out makes failures silent.
+  onError: (error) => console.error(error),
+})
+```
+
+Calling it stamps `action` and `v` and strips `undefined` properties exactly as
+the actionable caller does, then returns `void` before the request resolves:
+
+```typescript
+// src/spaces/openSharedLink.ts
+import { trackSpaces } from '../firebase/trackSpaces.js'
+
+export const openSharedLink = (spaceId: string, url: string): void => {
+  // Returns right away. The browser finishes the request after this document
+  // is gone.
+  trackSpaces('link-followed', { spaceId, url })
+
+  window.location.assign(url)
+}
+```
+
+The following limits apply:
+
+- **Tokens come from the instances you pass.** The `Authorization` and
+  `X-Firebase-AppCheck` headers carry whatever the passed `auth` and `appCheck`
+  instances hold at call time, and a lookup that fails omits its header instead
+  of failing the call. A refresh that needs the network may not finish before
+  the navigation does, so a call made on an expiring token can arrive
+  unauthenticated.
+- **The emulator host and port are passed explicitly.** The SDK keeps the
+  origin a `connectFunctionsEmulator` call connected to private, so `emulator`
+  has to repeat that host and port, or the ones an emulator config in
+  `__FIREBASE_DEFAULTS__` supplies. Leaving it out sends the keepalive call to
+  the deployed function while every other call goes to the emulator.
+- **The 64 KiB budget is shared, so the client-side check is a floor.**
+  `KeepaliveBodyLimitBytes` is measured against this one request's body. The
+  budget belongs to the page and is shared by every keepalive request still in
+  flight, and some browsers count headers against it too. Passing the check does
+  not guarantee that the browser accepts the request.
+- **`onError` fires only while the page is still alive.** Once the document is
+  gone there is nothing left to call back into, so anything that fails after
+  unload fails invisibly.
+- **A browser without `keepalive` support falls back to today's behavior.** The
+  flag is ignored and the request is cancelled on unload, exactly as an ordinary
+  call would be.
+- **No connectivity handling, no retry, and no response data.** Rate limiting
+  shares the app's budget with the actionable caller, and a rate-limit failure
+  reaches `onError` as the limiter's own error with code
+  `client/rate-limit-exceeded`, readable through `getErrorWithCode`. A
+  successful response body is never read, and nothing is sent twice.
+- **`sendBeacon` is not an alternative.** It cannot carry the `Authorization`
+  and `X-Firebase-AppCheck` headers the callable endpoint authenticates with.
+
 ### `firebase-kit-client/firestore`
 
 `createFirestoreUtils` is called once, from the app's own database barrel, and
@@ -591,10 +709,27 @@ real modules do not declare them.
 
 - **`createActionableFunctionCaller<TCommand, TMap, TRateLimitCategory>(dependencies, name, defaultCategory, options?)`**:
   Returns `(action, data) => Promise<response>` for one callable group.
+- **`createKeepaliveFunctionCaller<TCommand, TMap, TRateLimitCategory>(dependencies, name, defaultCategory, options?)`**:
+  Returns `(action, data) => void` for one callable group, sending the same
+  request over `fetch` with `keepalive: true` so a navigation cannot cancel it.
+  It never throws, never reads a successful response, and reports every failure
+  to `options.onError`.
 - **`toActionableError(createError, error, message)`**: Returns a
   `ConnectivityError` untouched, and builds a fatal error out of anything else.
+- **`KeepaliveCallError`**: What `onError` receives for the caller's own
+  failures. `code` is the `functions/<code>` string the Functions SDK uses,
+  present whenever a response came back. It is derived from the HTTP status,
+  and an error envelope in the body refines it. `status` is that response's HTTP status. `details` is the
+  envelope's payload as it arrived. A failure that never reached a response has
+  neither `code` nor `status`.
+- **`KeepaliveBodyLimitBytes`**: `65_536`, the request-body size past which the
+  caller reports the call as oversized instead of sending it.
 - **`RequestResponseMap`**, **`ActionableFunctionCallerOptions`** (`timeoutMs`,
-  `rateLimitMap`), **`ActionableFunctionCallerDependencies`**.
+  `rateLimitMap`), **`ActionableFunctionCallerDependencies`**,
+  **`KeepaliveFunctionCallerDependencies`** (`currentAPIVersion`,
+  `checkRateLimit`, `firebaseApp`, `functions`, `auth`, `appCheck`,
+  `emulator`), **`FunctionsEmulator`** (`host`, `port`),
+  **`KeepaliveFunctionCallerOptions`** (`rateLimitMap`, `onError`).
 
 ### `firebase-kit-client/connectivity`
 

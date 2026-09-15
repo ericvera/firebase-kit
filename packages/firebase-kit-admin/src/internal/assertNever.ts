@@ -3,8 +3,7 @@
  * If all cases are handled, TypeScript accepts the never parameter.
  * If a case is missing, TypeScript produces a compile error.
  */
-export const assertNever = (value: never): void => {
+export const assertNever = (_: never): void => {
   // Reaching this line at runtime means a case was missed. There is nothing
-  // useful to do with the value, so it is discarded rather than left unread.
-  void value
+  // useful to do with the value.
 }

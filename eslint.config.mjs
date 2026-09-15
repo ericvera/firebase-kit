@@ -41,6 +41,10 @@ export default defineConfig(
         'error',
         {
           ignoreRestSiblings: true,
+          // A parameter that exists only for the type checker, such as the
+          // `never` in `assertNever`, is named `_`. Matches TypeScript's own
+          // `noUnusedParameters`, which already ignores that prefix.
+          argsIgnorePattern: '^_',
         },
       ],
 

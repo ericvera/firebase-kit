@@ -1,13 +1,14 @@
 {
   "name": "firebase-kit-client",
   "version": "2.0.0",
-  "description": "Client-side Firebase toolkit: typed callable functions, Firestore helpers, connectivity handling, rate limiting, and test mocks.",
+  "description": "Client-side Firebase toolkit: typed callable functions including fire-and-forget keepalive callables, Firestore helpers, connectivity handling, rate limiting, and test mocks.",
   "keywords": [
     "firebase",
     "firebase-kit",
     "firestore",
     "cloud-functions",
     "callable",
+    "keepalive",
     "client",
     "connectivity",
     "rate-limit",
@@ -48,7 +49,7 @@
   "peerDependencies": {
     "firebase": "^12.18.0",
     "getsetdel": "^3.0.0",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "peerDependenciesMeta": {
     "vitest": {
@@ -57,12 +58,13 @@
   },
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24.13.3",
-    "eslint": "^10.9.1",
-    "firebase": "^12.18.0",
+    "@types/node": "^24.13.4",
+    "eslint": "^10.10.0",
+    "firebase": "^12.19.0",
     "getsetdel": "^3.0.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
   },
   "repository": {
     "type": "git",
