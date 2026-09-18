@@ -20,11 +20,10 @@ export const createGetDocWithCache = (
    * to reduce Firestore reads. Automatically handles cache refresh based
    * on your shouldRefresh logic.
    *
-   * A Firestore-document adapter over readThroughCache — the cache-aside
-   * sequence
-   * (serve fresh, serve stale on connectivity/offline, refresh on success)
-   * lives
-   * there; this only supplies how to read/fetch/write/drop a single doc.
+   * A Firestore-document adapter over readThroughCache. The cache-aside
+   * sequence (serve fresh, serve stale on connectivity/offline, refresh on
+   * success) lives there, and this only supplies how to open the store and how
+   * to read/fetch/write/drop a single doc.
    *
    * @template DBT - The Firestore document data type
    * @template T - The type of the document with id field
@@ -39,16 +38,19 @@ export const createGetDocWithCache = (
   ): Promise<T | undefined> => {
     const { name, version, tags } = options
 
-    const storeToken = await createStore({
-      name,
-      version: (version ?? 0) + dependencies.cacheVersion,
-      ...(tags === undefined ? {} : { tags }),
-    })
-
     return readThroughCache<T>({
       isOnline: navigator.onLine || !!options.inEmulator,
 
-      readCache: async () => {
+      // Rebuilt on every call rather than captured, so each attempt hands the
+      // closures below a token the current store matches.
+      openStore: () =>
+        createStore({
+          name,
+          version: (version ?? 0) + dependencies.cacheVersion,
+          ...(tags === undefined ? {} : { tags }),
+        }),
+
+      readCache: async (storeToken) => {
         const cachedEntry = await get<CachedDocument<DBT>>(
           storeToken,
           options.id,
@@ -85,7 +87,7 @@ export const createGetDocWithCache = (
             : ({ id: options.id, ...data } as T)
         }),
 
-      writeCache: async (value) => {
+      writeCache: async (storeToken, value) => {
         // The id is the cache key, not part of the stored document data.
         const { id, ...data } = value
 
@@ -95,7 +97,7 @@ export const createGetDocWithCache = (
         })
       },
 
-      dropCache: () => del(storeToken, options.id),
+      dropCache: (storeToken) => del(storeToken, options.id),
     })
   }
 

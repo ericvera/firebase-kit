@@ -9,7 +9,6 @@ const mock = createGetSetDelMock(
 export const {
   clear,
   clearEntriesFault,
-  createStore,
   del,
   delMany,
   entries,
@@ -28,3 +27,8 @@ export const {
   simulateStoreReset,
   stubStore,
 } = mock
+
+// A spy rather than a plain re-export, so a test can wrap a single open of the
+// store, for instance to wipe it the moment it is opened. `mockReset` restores
+// this implementation after each case.
+export const createStore = vi.fn(mock.createStore)

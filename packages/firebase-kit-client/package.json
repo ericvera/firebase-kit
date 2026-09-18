@@ -58,13 +58,13 @@
   },
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24.13.4",
+    "@types/node": "^24.13.5",
     "eslint": "^10.10.0",
     "firebase": "^12.19.0",
     "getsetdel": "^3.0.0",
     "typescript": "^6.0.3",
     "vite": "^8.3.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.1"
   },
   "repository": {
     "type": "git",

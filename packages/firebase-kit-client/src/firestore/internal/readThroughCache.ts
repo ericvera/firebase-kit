@@ -1,3 +1,4 @@
+import type { GetSetDelStoreToken } from 'getsetdel'
 import { GetSetDelResetError } from 'getsetdel'
 import {
   ConnectionStatus,
@@ -15,15 +16,24 @@ interface CachedValue<T> {
 
 /**
  * Configuration for a single-entity read-through cache. The caller supplies how
- * to read/write/drop its own cache and how to fetch; readThroughCache owns the
- * cache-aside sequence so no caller can reintroduce a delete-before-fetch.
+ * to open its store, how to read/write/drop it, and how to fetch, while
+ * readThroughCache owns the cache-aside sequence so no caller can reintroduce a
+ * delete-before-fetch.
  */
 export interface ReadThroughCacheOptions<T> {
   /** True when the network is reachable (navigator online, or emulator). */
   isOnline: boolean
 
+  /**
+   * Open the backing store and hand back its token. Called once per attempt,
+   * so a retry after a store reset never reuses a token the reset invalidated.
+   */
+  openStore: () => Promise<GetSetDelStoreToken>
+
   /** Read the cached value, or undefined when absent. */
-  readCache: () => Promise<CachedValue<T> | undefined>
+  readCache: (
+    storeToken: GetSetDelStoreToken,
+  ) => Promise<CachedValue<T> | undefined>
 
   /**
    * Fetch the fresh value from the backend. Must throw a ConnectivityError on a
@@ -34,14 +44,14 @@ export interface ReadThroughCacheOptions<T> {
   fetch: () => Promise<T | undefined>
 
   /** Persist a freshly fetched value. */
-  writeCache: (value: T) => Promise<void>
+  writeCache: (storeToken: GetSetDelStoreToken, value: T) => Promise<void>
 
   /**
    * Remove the cached entry (entity confirmed absent on the backend). Receives
    * the dropped value so adapters can also purge secondary index entries
    * derived from it.
    */
-  dropCache: (value: T) => Promise<void>
+  dropCache: (storeToken: GetSetDelStoreToken, value: T) => Promise<void>
 }
 
 /**
@@ -52,6 +62,12 @@ export interface ReadThroughCacheOptions<T> {
  * fetch, drop on a confirmed server-side deletion. It is never deleted
  * speculatively, so a failed refresh always leaves the saved copy intact (no
  * delete-then-restore).
+ *
+ * The store is opened here rather than by the caller, once per attempt,
+ * because getsetdel validates a token against its inventory on every call and
+ * only a fresh open rewrites that inventory after a reset. A caller that
+ * opened once and closed over the token would retry with a token the reset
+ * already invalidated, so every attempt would fail the same way.
  *
  * Outcomes:
  * - fresh cache             → serve it, no network
@@ -70,7 +86,11 @@ export const readThroughCache = async <T>(
   // cleared the store), with exponential backoff.
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const cached = await options.readCache()
+      // Inside the try, so a reset the open itself raises is retried like any
+      // other rather than escaping the loop.
+      const storeToken = await options.openStore()
+
+      const cached = await options.readCache(storeToken)
 
       // Fresh cache: no network needed.
       if (cached?.fresh) {
@@ -105,14 +125,14 @@ export const readThroughCache = async <T>(
       // Entity no longer exists on the backend: drop the stale cache entry.
       if (data === undefined) {
         if (cached) {
-          await options.dropCache(cached.value)
+          await options.dropCache(storeToken, cached.value)
         }
 
         return undefined
       }
 
       // Fresh value: overwrite the cache and return it.
-      await options.writeCache(data)
+      await options.writeCache(storeToken, data)
 
       return data
     } catch (error) {

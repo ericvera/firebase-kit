@@ -1,6 +1,7 @@
 import type { DocumentData, DocumentReference } from 'firebase/firestore/lite'
 import { createStore, get, set } from 'getsetdel'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { simulateStoreReset } from '../../__mocks__/getsetdel/index.js'
 import { createTestFirestoreDependencies } from '../../__test__/utils/createTestFirestoreDependencies.js'
 import type { CachedDocument, FirestoreUtilsDependencies } from '../types.js'
 import { createGetDocWithCache } from './getDocWithCache.js'
@@ -9,6 +10,8 @@ const state = vi.hoisted((): StoreState => ({
   remote: undefined,
   storeName: 'spaces',
 }))
+
+vi.mock('getsetdel')
 
 vi.mock('firebase/firestore/lite', () => ({
   getDoc: () => Promise.resolve({ data: () => state.remote }),
@@ -49,7 +52,21 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
+
+/** Arms the next store open to hand back a store another tab just wiped. */
+const wipeStoreOnNextOpen = () => {
+  vi.mocked(createStore).mockImplementationOnce(async (storeInfo) => {
+    // A once-implementation is dequeued before it runs, so this call reaches
+    // the shim's delegate instead of recursing into this wrapper.
+    const storeToken = await createStore(storeInfo)
+
+    await simulateStoreReset(storeToken)
+
+    return storeToken
+  })
+}
 
 it('stops serving a cached document once the global version is bumped', async () => {
   state.remote = { name: 'A space' }
@@ -259,4 +276,124 @@ it('treats the emulator as online even when the browser reports offline', async 
       "name": "A space",
     }
   `)
+})
+
+it('recovers when the store is wiped before the first cache read', async () => {
+  vi.useFakeTimers()
+  state.remote = { name: 'A space' }
+  wipeStoreOnNextOpen()
+
+  const getDocWithCache = createGetDocWithCache(createDependencies())
+
+  const pending = getDocWithCache(baseOptions())
+  const assertion = expect(pending).resolves.toEqual({
+    id: 'space-1',
+    name: 'A space',
+  })
+
+  // The whole backoff schedule, so a read that never recovers reports the
+  // give-up error rather than parking on a timer until the case times out.
+  await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000)
+
+  // Verify that a wipe landing before the first cache read costs one attempt
+  // instead of the whole read
+  await assertion
+
+  const cached = await get<CachedDocument<DocumentData>>(
+    await openStore(),
+    'space-1',
+  )
+
+  // Verify that the retry wrote through a store the wipe left behind, so the
+  // document is there for the next read
+  expect(cached?.data).toEqual({ name: 'A space' })
+})
+
+it('recovers when the store is wiped between the cache read and the write', async () => {
+  vi.useFakeTimers()
+  state.remote = { name: 'A space' }
+
+  let wiped = false
+
+  const getDocWithCache = createGetDocWithCache(createDependencies())
+
+  const pending = getDocWithCache({
+    ...baseOptions(),
+    getRef: async () => {
+      // getRef runs inside the fetch, after the cache read and before the
+      // write, so wiping here lands the reset between the two. Only the first
+      // call wipes, otherwise the retry would be wiped as well.
+      if (!wiped) {
+        wiped = true
+
+        await simulateStoreReset(await openStore())
+      }
+
+      return {} as DocumentReference
+    },
+  })
+
+  const assertion = expect(pending).resolves.toEqual({
+    id: 'space-1',
+    name: 'A space',
+  })
+
+  await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000)
+
+  // Verify that a wipe arriving mid-attempt is survivable wherever it lands,
+  // not just before the read
+  await assertion
+
+  const cached = await get<CachedDocument<DocumentData>>(
+    await openStore(),
+    'space-1',
+  )
+
+  expect(cached?.data).toEqual({ name: 'A space' })
+})
+
+it('recovers three concurrent reads issued after a wipe', async () => {
+  vi.useFakeTimers()
+  state.remote = { name: 'A space' }
+
+  await simulateStoreReset(await openStore())
+
+  // getsetdel samples Date.now() only after awaiting its inventory read, so
+  // three concurrent opens sample it in turn. Distinct values make them race
+  // for the inventory entry, which leaves two of them holding a token the
+  // store no longer matches, the way a real fan-out after a wipe does.
+  let creation = Date.now()
+
+  vi.spyOn(Date, 'now').mockImplementation(() => {
+    creation += 1
+
+    return creation
+  })
+
+  const getDocWithCache = createGetDocWithCache(createDependencies())
+
+  // Calling the cache fresh keeps the two losers off the network on their
+  // retry, because by then the winner has already cached the document. Two
+  // fetches in one tick would hit the real Firestore module, which vitest
+  // hands to all but the first of concurrent dynamic imports.
+  const options = { ...baseOptions(), shouldRefresh: () => false }
+
+  const reads = Promise.all([
+    getDocWithCache(options),
+    getDocWithCache(options),
+    getDocWithCache(options),
+  ])
+
+  const expected = { id: 'space-1', name: 'A space' }
+  const assertion = expect(reads).resolves.toEqual([
+    expected,
+    expected,
+    expected,
+  ])
+
+  await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000)
+
+  // Verify that a fan-out onto a wiped store converges on the store the
+  // winning open created, rather than failing every read that lost the race
+  await assertion
 })
