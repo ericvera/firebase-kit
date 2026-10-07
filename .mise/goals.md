@@ -14,6 +14,19 @@ Working tree checked with the project's commands. `yarn lint`, `yarn build`, `ya
 - **Hard to undo:** replacing a peer range counts as breaking (CLAUDE.md). The squashed commit would need `!` or `BREAKING CHANGE:`, and all three packages would take the same major. Widening (`^4.1.0 || ^6.0.0`, `^12.18.0 || ^13.0.0`) is a minor, but nothing in the repo tests the old majors.
 - **Open scope:** goals.md doesn't say whether to replace or widen the betterbe and firebase peer ranges.
 
-## Open questions
+## Decisions
 
-1. betterbe and firebase peer ranges: replace them with the new majors, or widen them?
+- Replace the peer ranges: betterbe `^4.1.0` → `^6.0.0` in firebase-kit-admin, and firebase `^12.18.0` → `^13.0.0` in firebase-kit-client. This is a breaking change, so the squashed commit carries `!` and all three packages take the next major.
+
+## Assumptions
+
+- The owner's uncommitted dependency bumps (root and package `package.json` files, `yarn.lock`) are part of this work and get committed on this branch unchanged.
+- The scdate-testing peer mismatch (`vitest ^4` vs 5.0.3) was there before this branch and is out of scope.
+- The READMEs stay as they are. They point at `npm info … peerDependencies`, and the betterbe snippet already matches v6.
+- Validation means Format, Check and both unit-test suites, plus a `yarn pack` consumer check of the admin README betterbe snippet against betterbe v6 (config test exception).
+
+## Proposal
+
+The new betterbe v6 and firebase v13 versions pass every check, but the peer ranges still promise betterbe v4 and firebase v12.
+Commit the bumps, replace the two peer ranges, and validate with the quality commands plus a `yarn pack` consumer check. Ship as a breaking (`!`) major.
+Skip spec and critic: it is two manifest lines.
