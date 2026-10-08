@@ -21,7 +21,7 @@ Make the published peer ranges match the dependency majors the packages are now 
 - Decision from the owner: replace the ranges, do not widen them (no `||`). Nothing in the repo tests the old majors.
 - betterbe is used in `packages/firebase-kit-admin/src/validation/internal/validateSchema.ts` and `packages/firebase-kit-admin/src/validation/validateSchemaAndTrim.ts`. Both compile against v6 already, so no source change is needed.
 - READMEs stay unchanged. They point at `npm info <pkg> peerDependencies` and must never restate a version range (CLAUDE.md). The betterbe snippet at `packages/firebase-kit-admin/README.md:337-358` (header comment `// src/spaces/schemas.ts`) already uses the v6 API.
-- Release impact: replacing a peer range is breaking. The commit for this task should use a breaking type, for example `feat!: require betterbe v6 and firebase v13`, so the squashed merge publishes a new major. Tag `v4.0.0` exists, so this publishes as v5.0.0.
+- Release impact: replacing a peer range is breaking. `.github/workflows/publish.yml` runs `TriPSs/conventional-changelog-action@v6` with the default angular preset, whose header parser does not match `feat!:`; only a `BREAKING CHANGE` note produces a major bump. A `!` alone publishes a patch (v4.0.1). Every past major (c413332, 291af9a, 07b3725) carried a `BREAKING CHANGE:` footer. So the peer commit, and the squashed commit message at ship time, must carry a `BREAKING CHANGE:` footer naming both replaced peer ranges (betterbe `^4.1.0` → `^6.0.0` in firebase-kit-admin, firebase `^12.18.0` → `^13.0.0` in firebase-kit-client). `!` after the type is optional. Tag `v4.0.0` exists, so this publishes as v5.0.0.
 - The client README snippets that import firebase directly are `packages/firebase-kit-client/README.md:406-455` (header `// src/firebase/trackSpaces.ts`, imports `getAuth` from `firebase/auth` and `./rateLimit.js`) and `:552-596` (header `// src/spaces/spaceReads.ts`, imports `doc`, `DocumentReference`, `Firestore` from `firebase/firestore/lite` and `../firebase/db.js`). Their local imports come from other README blocks: `src/firebase/rateLimit.ts` (line 223, imports `./hosting.js`), `src/firebase/hosting.ts` (line 174), `src/firebase/db.ts` (line 518, imports `./connectivity.js` and `./hosting.js`), `src/firebase/connectivity.ts` (line 256), and anything those import in turn. `grep -n '^// src/' packages/firebase-kit-client/README.md` lists every block header.
 
 ## Guides
@@ -41,7 +41,15 @@ None. The mise config has no Skills & guides entries.
 6. In `packages/firebase-kit-client/package.json`, set `peerDependencies.firebase` to `"^13.0.0"`.
 7. Run `yarn install` from the repo root so the workspace entries in `yarn.lock` record the new peer ranges. Run `diff <scratchpad>/yarn.lock.pre-peer yarn.lock`. Expect only the `firebase-kit-admin@workspace:` and `firebase-kit-client@workspace:` entries' `peerDependencies` lines to change. Any other change means stop and report.
 8. Run `yarn format`.
-9. Commit the peer changes (the two package `package.json` files and `yarn.lock`) with a breaking commit message (`!` after the type).
+9. Commit the peer changes (the two package `package.json` files and `yarn.lock`) with a message whose body ends in a `BREAKING CHANGE:` footer naming both replaced peer ranges. A `!` after the type is optional. For example:
+
+   ```
+   feat!: require betterbe v6 and firebase v13
+
+   BREAKING CHANGE: firebase-kit-admin peer betterbe ^4.1.0 → ^6.0.0; firebase-kit-client peer firebase ^12.18.0 → ^13.0.0.
+   ```
+
+   The footer must also be in the squashed commit message at ship time; the angular preset in `publish.yml` ignores `!` and would publish a patch without it.
 
 ## Gotchas
 
