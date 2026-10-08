@@ -47,7 +47,7 @@
     "firebase-kit-protocol": "workspace:*"
   },
   "peerDependencies": {
-    "firebase": "^12.18.0",
+    "firebase": "^13.0.0",
     "getsetdel": "^3.0.0",
     "vitest": "^5.0.0"
   },
@@ -58,12 +58,12 @@
   },
   "devDependencies": {
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24.19.0",
-    "eslint": "^10.11.0",
-    "firebase": "^12.19.0",
+    "@types/node": "^24.19.1",
+    "eslint": "^10.12.0",
+    "firebase": "^13.0.0",
     "getsetdel": "^3.0.0",
     "typescript": "^6.0.3",
-    "vite": "^8.3.2",
+    "vite": "^8.3.3",
     "vitest": "^5.0.3"
   },
   "repository": {

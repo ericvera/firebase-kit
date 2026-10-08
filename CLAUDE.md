@@ -10,9 +10,10 @@ Never open a pull request for, or merge into another branch, any branch whose tr
 `conventional-changelog` **from commit footers only**, and merges are squashed —
 so the single squashed commit message decides the release. A breaking change
 (replaced peer range, removed or renamed `exports` subpath, dropped peer) must
-carry `!` after the type or a `BREAKING CHANGE:` body, or it publishes as a
-minor. All three packages are versioned together by
-`yarn workspaces foreach --all version`, so every package takes the same major.
+carry a `BREAKING CHANGE:` footer, or it publishes as a minor or patch; `!`
+after the type is optional and not enough on its own. All three packages are
+versioned together by `yarn workspaces foreach --all version`, so every package
+takes the same major.
 
 ## Documentation conventions
 
