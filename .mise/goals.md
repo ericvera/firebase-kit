@@ -33,6 +33,10 @@ Hard to undo: nothing. The thrown message text changes → `fix:` commit, patch 
 1. Call `validateSchemaAndTrim` with a betterbe 6 schema whose field `phone` has a `.test(...)` that fails with reason `invalid phone number`.
 2. Observe: `Value of 'phone' failed custom validation (error: 'phone: invalid phone number').`
 
+## Upstream
+
+betterbe 6.1.0 (`ericvera/betterbe` b8b8282, "feat: add reason to ValidationError") adds a read-only `reason` to `ValidationError`: the message without the `[key ]<pathString>: ` prefix, for every error code; `message` unchanged; `reason === message` when there is no prefix.
+
 ## Expected behavior
 
 `Value of 'phone' failed custom validation (error: 'invalid phone number').` — likewise for nested paths (`a.b`) and record keys (`key m.k: ` stripped). A root-level test message (no prefix) is unchanged.
@@ -43,11 +47,12 @@ New `it(...)` cases in `packages/firebase-kit-admin/src/validation/internal/vali
 
 ## Assumptions
 
-- Keep the existing `(error: '...')` wrapper; only the duplicated prefix goes.
-- Strip the prefix only when `error.message` actually starts with it; otherwise use the message as-is.
+- Keep the existing `(error: '...')` wrapper; only the duplicated path goes.
+- Use `error.reason` instead of stripping a prefix from `error.message` (owner chose the upstream field).
+- Raise betterbe in `packages/firebase-kit-admin/package.json` to `^6.1.0` in both `peerDependencies` and `devDependencies` (and the lockfile). A narrowed floor within the same major is not a replaced range, so it ships as a `fix:` patch with no `BREAKING CHANGE:` footer.
 
 ## Proposal
 
-Issue: betterbe 6 prefixes `test` failure messages with the path, so `validateSchema` prints the path twice (`Value of 'phone' … (error: 'phone: invalid phone number')`); betterbe has no reason-only field.
-Fix: strip the `[key ]<pathString>: ` prefix from `error.message` in the `case 'test'` branch, with unit regression tests for value, nested, record-key and root paths; ship as `fix:` (patch).
-Skips: spec and critic (one small branch in one module, nothing hard to undo).
+Issue: betterbe 6 prefixes `test` failure messages with the path, so `validateSchema` prints the path twice (`Value of 'phone' … (error: 'phone: invalid phone number')`).
+Fix: use betterbe 6.1.0's `error.reason` in the `case 'test'` branch, raise firebase-kit-admin's betterbe peer and dev ranges to `^6.1.0`, and add unit regression tests (value, nested, record-key, root); ship as `fix:` (patch).
+Skips: spec and critic (one branch in one module plus a range bump, nothing hard to undo).
