@@ -72,7 +72,7 @@ export const validateSchema = <T>(
           message = `${subject} is not unique.`
           break
         case 'test':
-          message = `${subject} failed custom validation (error: '${error.message}').`
+          message = `${subject} failed custom validation (error: '${error.reason}').`
           break
         case 'unknown-keys': {
           const pathStr =

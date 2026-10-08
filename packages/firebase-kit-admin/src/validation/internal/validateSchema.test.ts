@@ -1,4 +1,4 @@
-import { object, string } from 'betterbe'
+import { object, record, string } from 'betterbe'
 import type { AuthData } from 'firebase-functions/tasks'
 import { expect, it, vi } from 'vitest'
 import { validateSchema } from './validateSchema.js'
@@ -64,4 +64,74 @@ it('preserves whitespace in string values', async () => {
       "value": "  hello  ",
     }
   `)
+})
+
+it('reports a failed test on a field without repeating its path', async () => {
+  const schema = object({
+    phone: string({
+      test: (_value, report) => {
+        report({ message: 'invalid phone number' })
+      },
+    }),
+  })
+
+  await expect(
+    validateSchema(schema, testAuthData, { phone: 'x' }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Value of 'phone' failed custom validation (error: 'invalid phone number').]`,
+  )
+})
+
+it('reports a failed test on a nested field without repeating its path', async () => {
+  const schema = object({
+    a: object({
+      b: string({
+        test: (_value, report) => {
+          report({ message: 'bad' })
+        },
+      }),
+    }),
+  })
+
+  await expect(
+    validateSchema(schema, testAuthData, { a: { b: 'x' } }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Value of 'a.b' failed custom validation (error: 'bad').]`,
+  )
+})
+
+it('reports a failed test on a record key without repeating its path', async () => {
+  const schema = object({
+    m: record(
+      string({
+        test: (_value, report) => {
+          report({ message: 'badkey' })
+        },
+      }),
+      string(),
+    ),
+  })
+
+  await expect(
+    validateSchema(schema, testAuthData, { m: { k: 'v' } }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Key 'm.k' failed custom validation (error: 'badkey').]`,
+  )
+})
+
+it('reports a failed test at the root', async () => {
+  const schema = object(
+    { name: string() },
+    {
+      test: (_value, report) => {
+        report({ message: 'rootbad' })
+      },
+    },
+  )
+
+  await expect(
+    validateSchema(schema, testAuthData, { name: 'x' }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Value failed custom validation (error: 'rootbad').]`,
+  )
 })
