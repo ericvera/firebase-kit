@@ -4139,7 +4139,7 @@ __metadata:
     vite: "npm:^8.3.3"
     vitest: "npm:^5.0.3"
   peerDependencies:
-    betterbe: ^4.1.0
+    betterbe: ^6.0.0
     firebase-admin: ^14.3.0
     firebase-functions: ^7.3.2
     vitest: ^5.0.0
@@ -4163,7 +4163,7 @@ __metadata:
     vite: "npm:^8.3.3"
     vitest: "npm:^5.0.3"
   peerDependencies:
-    firebase: ^12.18.0
+    firebase: ^13.0.0
     getsetdel: ^3.0.0
     vitest: ^5.0.0
   peerDependenciesMeta:
