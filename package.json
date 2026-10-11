@@ -29,13 +29,13 @@
     "@tsconfig/strictest": "^2.0.8",
     "@types/node": "^24.19.1",
     "eslint": "^10.12.0",
-    "firebase-tools": "15.32.1",
+    "firebase-tools": "15.33.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.9",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.1",
-    "vite": "^8.3.3",
+    "vite": "^8.3.4",
     "vitest": "^5.0.3"
   },
   "prettier": {
