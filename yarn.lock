@@ -185,13 +185,13 @@ __metadata:
     "@tsconfig/strictest": "npm:^2.0.8"
     "@types/node": "npm:^24.19.1"
     eslint: "npm:^10.12.0"
-    firebase-tools: "npm:15.32.1"
+    firebase-tools: "npm:15.33.0"
     husky: "npm:^9.1.7"
     lint-staged: "npm:^17.6.0"
     prettier: "npm:^3.9.9"
     typescript: "npm:^6.0.3"
     typescript-eslint: "npm:^8.71.1"
-    vite: "npm:^8.3.3"
+    vite: "npm:^8.3.4"
     vitest: "npm:^5.0.3"
   languageName: unknown
   linkType: soft
@@ -4132,11 +4132,11 @@ __metadata:
     firebase-admin: "npm:^14.5.0"
     firebase-functions: "npm:^7.4.0"
     firebase-kit-protocol: "workspace:*"
-    firebase-tools: "npm:15.32.1"
+    firebase-tools: "npm:15.33.0"
     jest-diff: "npm:^30.5.2"
     scdate-testing: "npm:^7.1.2"
     typescript: "npm:^6.0.3"
-    vite: "npm:^8.3.3"
+    vite: "npm:^8.3.4"
     vitest: "npm:^5.0.3"
   peerDependencies:
     betterbe: ^6.1.0
@@ -4160,7 +4160,7 @@ __metadata:
     firebase-kit-protocol: "workspace:*"
     getsetdel: "npm:^3.0.0"
     typescript: "npm:^6.0.3"
-    vite: "npm:^8.3.3"
+    vite: "npm:^8.3.4"
     vitest: "npm:^5.0.3"
   peerDependencies:
     firebase: ^13.0.0
@@ -4182,9 +4182,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"firebase-tools@npm:15.32.1":
-  version: 15.32.1
-  resolution: "firebase-tools@npm:15.32.1"
+"firebase-tools@npm:15.33.0":
+  version: 15.33.0
+  resolution: "firebase-tools@npm:15.33.0"
   dependencies:
     "@apphosting/common": "npm:^0.0.8"
     "@electric-sql/pglite": "npm:^0.3.3"
@@ -4258,7 +4258,7 @@ __metadata:
     zod: "npm:^4.0.0"
   bin:
     firebase: lib/bin/firebase.js
-  checksum: 10c0/1e81caf6fb678ea83c13afb3b77df2d94979edfaf5a62e9efee0f0ba8e7f1a68fbcc0bfffa931d629cfd566e0227eee174e3728a97fe8ac08966bc69cbd83b52
+  checksum: 10c0/c20e087ec8ee70d06fdb9f92a3b0b26a4af71badee079add014adc443e47104c48c117c63a7ec113c084a8ff3017cc9f9cd960305e55968e13a9fab4a220d179
   languageName: node
   linkType: hard
 
@@ -6129,12 +6129,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nanoid@npm:^3.3.18":
-  version: 3.3.19
-  resolution: "nanoid@npm:3.3.19"
+"nanoid@npm:^3.3.19":
+  version: 3.3.20
+  resolution: "nanoid@npm:3.3.20"
   bin:
     nanoid: bin/nanoid.cjs
-  checksum: 10c0/ce7afa6258bfaa00bdc8de291cfe9913280eaa403b7d9cff3db4e4200c1913e7163577df74897958da144db473a96c67f74f57db0f542fbfe409df677bae3255
+  checksum: 10c0/856e8bf3bddb959d65997bd94908be030dbc5e6ed88fb3af2a638e51d1938f4d4f454c7c7231aba340775224f88b8cfd3ce1693c70471bfd05f5b6a2227c0c1e
   languageName: node
   linkType: hard
 
@@ -6690,14 +6690,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"postcss@npm:^8.5.28":
-  version: 8.5.28
-  resolution: "postcss@npm:8.5.28"
+"postcss@npm:^8.5.29":
+  version: 8.5.29
+  resolution: "postcss@npm:8.5.29"
   dependencies:
-    nanoid: "npm:^3.3.18"
+    nanoid: "npm:^3.3.19"
     picocolors: "npm:^1.1.1"
-    source-map-js: "npm:^1.2.1"
-  checksum: 10c0/9fe44215a6628d89c8a75184b92f5b2f77e16f9e5b13b39b9009bb7e8e6eccddf82c8854bae922db1f17ace6ef3445073fe38abff513caeb03e5285b1b55620a
+    source-map-js: "npm:^1.2.2"
+  checksum: 10c0/5d0c45a511e8ede0fe124d04885877525e69e3c1476f0c8c22ed53f3945bace9ca5ef8578274bdfe916b1cd0301253a52c5dbd8695115fae805cee55465088fc
   languageName: node
   linkType: hard
 
@@ -7137,7 +7137,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rolldown@npm:~1.2.11":
+"rolldown@npm:~1.2.12":
   version: 1.2.13
   resolution: "rolldown@npm:1.2.13"
   dependencies:
@@ -7471,10 +7471,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"source-map-js@npm:^1.2.1":
-  version: 1.2.1
-  resolution: "source-map-js@npm:1.2.1"
-  checksum: 10c0/7bda1fc4c197e3c6ff17de1b8b2c20e60af81b63a52cb32ec5a5d67a20a7d42651e2cb34ebe93833c5a2a084377e17455854fee3e21e7925c64a51b6a52b0faf
+"source-map-js@npm:^1.2.2":
+  version: 1.2.2
+  resolution: "source-map-js@npm:1.2.2"
+  checksum: 10c0/d5d6dec62266834f83dd4f8a2606a196fb1a006ca5d53b0ef80ee513b7eba2f4e2ae241f4bc129ae7e9b80dea24f6e3d92b446b7e6e96be7653cab8888168a94
   languageName: node
   linkType: hard
 
@@ -8150,15 +8150,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite@npm:^8.3.3":
-  version: 8.3.3
-  resolution: "vite@npm:8.3.3"
+"vite@npm:^8.3.4":
+  version: 8.3.4
+  resolution: "vite@npm:8.3.4"
   dependencies:
     fsevents: "npm:~2.3.3"
     lightningcss: "npm:^1.33.0"
     picomatch: "npm:^4.0.7"
-    postcss: "npm:^8.5.28"
-    rolldown: "npm:~1.2.11"
+    postcss: "npm:^8.5.29"
+    rolldown: "npm:~1.2.12"
     tinyglobby: "npm:^0.2.17"
   peerDependencies:
     "@types/node": ^20.19.0 || >=22.12.0
@@ -8203,7 +8203,7 @@ __metadata:
       optional: true
   bin:
     vite: bin/vite.js
-  checksum: 10c0/a1fa945ad1dd98d43e45d491eee11505083b19e00f8c5549cd0771273717f7bdb431eef71ef3568d1effa6ba63719811e5151f3fbec84be5a017d4975470a0d9
+  checksum: 10c0/63d7351fa21580fb646f0b594c64e97a56cdf15c55a57372a7adefe6287995fa7384cb5ddca14695ff7dca738ba00e0a3352fc24df711d9c501c5576f40f0867
   languageName: node
   linkType: hard
 
