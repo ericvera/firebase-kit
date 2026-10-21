@@ -17,8 +17,21 @@ The change: add an optional details (and maybe a message prefix) argument that g
 - **Docs:** README signature at `packages/firebase-kit-admin/README.md:678`, prose at `:247-248`, snippet at `:252-280`. Errors entry at `:663` already documents `details?`.
 - **Client exposure verified (firebase-functions 7.4.0):** FunctionsInternalError is an `HttpsError` with code `internal`; the onCall catch passes any `instanceof HttpsError` through unchanged and responds `{error:{details, message, status:"INTERNAL"}}` (`lib/esm/common/providers/https.mjs:114,565,570`). Only non-HttpsError throws are replaced with a generic `INTERNAL` with no details (`https.mjs:565-567`). So the original message and details do reach the callable's client.
 
-## Open questions
+## Decisions
 
-1. Argument shape: 4th positional `details`, or a trailing options object `{ details?, message? }`?
-2. Message prefix: none, a prefix, or a full-message override?
-3. Client exposure of details: document the warning only, or keep details out of the HttpsError?
+1. Signature: `checkDocumentExists(ref, auth, reader?, options?)`, where `options` is a trailing object `{ details?: Record<string, unknown> }`. It is additive and non-breaking, so it ships as a minor `feat`. The object leaves room for later options.
+2. Message: unchanged (`<collection> not found: <id>`). There is no prefix and no override, so context goes in `details` only.
+3. Client exposure: `details` is forwarded to `FunctionsInternalError` as-is, so it reaches both the logs and the callable's client, like every other `FunctionsInternalError`. The README notes that `details` reaches the client, so callers should not put secrets in it.
+
+## Assumptions
+
+- When `options` or `options.details` is omitted, the thrown error carries no details, exactly as today.
+- Any caller that needs `details` without a custom reader passes `undefined` for `reader`.
+- The tests go in `src/firestore/checkDocumentExists.emulator.test.ts` and assert both `error.details` and the `logger.error` call. They run under `yarn test:emulator`.
+- The README signature, prose and snippet for `checkDocumentExists` are updated. No other package changes.
+
+## Proposal
+
+Issue: the missing-document error from `checkDocumentExists` carries no context about what had already happened.
+Approach: add a trailing `options?: { details? }` argument, forward `details` to the `FunctionsInternalError` it throws, add emulator tests, and update the README with a note that details reach the client.
+Skips: none. The change touches the public API, so the spec and critic steps run.
