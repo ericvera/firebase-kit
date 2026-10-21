@@ -15,6 +15,7 @@ The change: add an optional details (and maybe a message prefix) argument that g
 - **Callers:** none inside the repo besides the emulator test and README.
 - **Tests:** regression test goes in `src/firestore/checkDocumentExists.emulator.test.ts` (missing-doc cases at `:28-48`, mocks `firebase-functions` at `:17`). Assert `error.details` and the `logger.error` call as `src/errors/FunctionsInternalError.test.ts:35-42` does. Run `yarn test:emulator`.
 - **Docs:** README signature at `packages/firebase-kit-admin/README.md:678`, prose at `:247-248`, snippet at `:252-280`. Errors entry at `:663` already documents `details?`.
+- **Client exposure verified (firebase-functions 7.4.0):** FunctionsInternalError is an `HttpsError` with code `internal`; the onCall catch passes any `instanceof HttpsError` through unchanged and responds `{error:{details, message, status:"INTERNAL"}}` (`lib/esm/common/providers/https.mjs:114,565,570`). Only non-HttpsError throws are replaced with a generic `INTERNAL` with no details (`https.mjs:565-567`). So the original message and details do reach the callable's client.
 
 ## Open questions
 
