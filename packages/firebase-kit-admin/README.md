@@ -245,7 +245,11 @@ all-reads-before-any-writes error. What the split buys is that the order is
 legible — you can see which calls are the read phase — and that a function taking
 only a `TransactionWriter` cannot quietly add a read later.
 `checkDocumentExists` reads through either the reader or the ref itself and
-throws `internal` when the document is missing.
+throws `internal` when the document is missing. An optional fourth argument,
+`{ details }`, is passed through to the `FunctionsInternalError`, so it appears
+in the log entry and in the error the callable's client receives — never put
+secrets in it. Pass `undefined` as the reader to attach details outside a
+transaction.
 
 ```typescript
 // src/spaces/renameSpace.ts
@@ -269,6 +273,7 @@ export const renameSpace = (
       ref,
       auth,
       reader,
+      { details: { newName: name } },
     )
 
     writer.update(ref, { name })
@@ -675,8 +680,8 @@ from `process.env`) follow the same shape.
 - **`createFirestoreUtils<TCollection, TSubCollection>(options)`**: Returns
   `getFirestore`, `collectionDataPoint`, `subCollectionDataPoint`,
   `nestedSubCollectionDataPoint`, `runBatch` and `runTransaction`.
-- **`checkDocumentExists(ref, auth, reader?)`**: The document with its `id`, or
-  throws `internal`.
+- **`checkDocumentExists(ref, auth, reader?, options?)`**: The document with its
+  `id`, or throws `internal` with `options.details` attached to the error.
 - **`checkDocumentInQueryExists(query, options)`**: At most one document. Throws
   on multiple; throws on none only when `errorIfEmpty` is given.
 - **`TransactionReader`** / **`TransactionWriter`**: Type-only exports. Both are
