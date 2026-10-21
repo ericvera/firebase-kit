@@ -284,8 +284,10 @@ export const renameSpace = (
 
 `checkDocumentInQueryExists` is the query-shaped counterpart: it throws when a
 query matches more than one document, and returns `undefined` — or throws, if you
-pass `errorIfEmpty` — when it matches none. `runBatch` covers pure writes with no
-read step.
+pass `errorIfEmpty` — when it matches none. Its options also accept `details`,
+which is passed through to the `FunctionsInternalError` on either throw, so it
+appears in the log entry and in the error the callable's client receives — never
+put secrets in it. `runBatch` covers pure writes with no read step.
 
 ### `firebase-kit-admin/errors`
 
@@ -683,7 +685,8 @@ from `process.env`) follow the same shape.
 - **`checkDocumentExists(ref, auth, reader?, options?)`**: The document with its
   `id`, or throws `internal` with `options.details` attached to the error.
 - **`checkDocumentInQueryExists(query, options)`**: At most one document. Throws
-  on multiple; throws on none only when `errorIfEmpty` is given.
+  on multiple; throws on none only when `errorIfEmpty` is given. Either throw
+  carries `options.details` attached to the error.
 - **`TransactionReader`** / **`TransactionWriter`**: Type-only exports. Both are
   constructed by `runTransaction` and handed to its callback.
 - **`FirestoreUtilsOptions`**: `databaseId`, `emulatorDatabaseId`.

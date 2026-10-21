@@ -8,6 +8,7 @@ interface CheckDocumentInQueryExistsOptions {
   reader?: TransactionReader
   errorIfEmpty?: string
   errorIfMultiple?: string
+  details?: Record<string, unknown>
 }
 
 type CheckDocumentInQueryExistsResult<
@@ -20,6 +21,8 @@ type CheckDocumentInQueryExistsResult<
  * if multiple documents are found (with custom or default error message).
  * Throws if errorIfEmpty is provided and no document is found. Returns
  * undefined if errorIfEmpty is not provided and no document is found.
+ * `options.details` is forwarded to either thrown error, so it reaches the logs
+ * and the callable's client.
  */
 export const checkDocumentInQueryExists = async <
   T extends DBT & { id: string },
@@ -39,7 +42,11 @@ export const checkDocumentInQueryExists = async <
       options.errorIfMultiple ??
       `Expected at most 1 document in query, found ${String(snapshot.size)}`
 
-    throw new FunctionsInternalError(options.auth, errorMessage)
+    throw new FunctionsInternalError(
+      options.auth,
+      errorMessage,
+      options.details,
+    )
   }
 
   const doc = snapshot.docs[0]
@@ -47,7 +54,11 @@ export const checkDocumentInQueryExists = async <
 
   if (!doc || !data) {
     if (options.errorIfEmpty) {
-      throw new FunctionsInternalError(options.auth, options.errorIfEmpty)
+      throw new FunctionsInternalError(
+        options.auth,
+        options.errorIfEmpty,
+        options.details,
+      )
     }
 
     return undefined as CheckDocumentInQueryExistsResult<T, Options>

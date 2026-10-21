@@ -1,3 +1,5 @@
+import { logger } from 'firebase-functions'
+import type { HttpsError } from 'firebase-functions/https'
 import type { AuthData } from 'firebase-functions/tasks'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
@@ -18,6 +20,14 @@ vi.hoisted(() => {
 vi.mock('firebase-functions')
 
 const authData = { uid: 'test-uid', token: {} } as AuthData
+
+const captureError = (promise: Promise<unknown>) =>
+  promise.then(
+    () => {
+      throw new Error('Expected rejection')
+    },
+    (error: unknown) => error as HttpsError,
+  )
 
 let now = 0
 
@@ -179,4 +189,152 @@ it('returns document data when query has exactly one result with transaction', a
       "v": 1,
     }
   `)
+})
+
+it('forwards details to the error and the log when query has multiple results', async () => {
+  await addPersonToDB(now, {
+    id: TestPersonID1,
+    handle: 'duplicatedetails',
+    displayName: 'Person 1',
+  })
+  await addPersonToDB(now, {
+    id: TestPersonID2,
+    handle: 'duplicatedetails',
+    displayName: 'Person 2',
+  })
+
+  const query = personRefs.personByHandleQuery('duplicatedetails')
+
+  const error = await captureError(
+    checkDocumentInQueryExists(query, {
+      auth: authData,
+      details: { step: 'after-capture' },
+    }),
+  )
+
+  expect(error).toMatchInlineSnapshot(
+    `[Error: Expected at most 1 document in query, found 2]`,
+  )
+  expect(error.code).toBe('internal')
+  expect(error.details).toMatchInlineSnapshot(`
+    {
+      "step": "after-capture",
+    }
+  `)
+  expect(vi.mocked(logger.error)).toHaveBeenCalledOnce()
+  expect(vi.mocked(logger.error).mock.calls[0]).toMatchInlineSnapshot(`
+    [
+      "[INTERNAL] Expected at most 1 document in query, found 2 [UID: test-uid]",
+      {
+        "step": "after-capture",
+      },
+    ]
+  `)
+})
+
+it('forwards details to the error when query has multiple results with transaction', async () => {
+  await addPersonToDB(now, {
+    id: TestPersonID1,
+    handle: 'duplicatedetailstx',
+    displayName: 'Person 1',
+  })
+  await addPersonToDB(now, {
+    id: TestPersonID2,
+    handle: 'duplicatedetailstx',
+    displayName: 'Person 2',
+  })
+
+  const query = personRefs.personByHandleQuery('duplicatedetailstx')
+
+  const error = await captureError(
+    testDB.runTransaction(async (reader) =>
+      checkDocumentInQueryExists(query, {
+        auth: authData,
+        reader,
+        details: { step: 'after-capture' },
+      }),
+    ),
+  )
+
+  expect(error.details).toMatchInlineSnapshot(`
+    {
+      "step": "after-capture",
+    }
+  `)
+})
+
+it('forwards details to the error and the log when query is empty and errorIfEmpty is provided', async () => {
+  const query = personRefs.personByHandleQuery('nonexistentdetails')
+
+  const error = await captureError(
+    checkDocumentInQueryExists(query, {
+      auth: authData,
+      errorIfEmpty: 'Person not found for handle nonexistentdetails',
+      details: { step: 'after-capture' },
+    }),
+  )
+
+  expect(error).toMatchInlineSnapshot(
+    `[Error: Person not found for handle nonexistentdetails]`,
+  )
+  expect(error.code).toBe('internal')
+  expect(error.details).toMatchInlineSnapshot(`
+    {
+      "step": "after-capture",
+    }
+  `)
+  expect(vi.mocked(logger.error)).toHaveBeenCalledOnce()
+  expect(vi.mocked(logger.error).mock.calls[0]).toMatchInlineSnapshot(`
+    [
+      "[INTERNAL] Person not found for handle nonexistentdetails [UID: test-uid]",
+      {
+        "step": "after-capture",
+      },
+    ]
+  `)
+})
+
+it('leaves details undefined when details is not provided', async () => {
+  const query = personRefs.personByHandleQuery('nonexistentnodetails')
+
+  const error = await captureError(
+    checkDocumentInQueryExists(query, {
+      auth: authData,
+      errorIfEmpty: 'Person not found for handle nonexistentnodetails',
+    }),
+  )
+
+  expect(error.details).toBeUndefined()
+  expect(vi.mocked(logger.error)).toHaveBeenCalledOnce()
+  expect(vi.mocked(logger.error).mock.calls[0]?.[1]).toBeUndefined()
+})
+
+it('returns undefined without logging when query is empty with details but no errorIfEmpty', async () => {
+  const query = personRefs.personByHandleQuery('nonexistentnoerror')
+
+  const result = await checkDocumentInQueryExists(query, {
+    auth: authData,
+    details: { step: 'after-capture' },
+  })
+
+  expect(result).toBeUndefined()
+  expect(vi.mocked(logger.error)).not.toHaveBeenCalled()
+})
+
+it('returns document data without logging when query has exactly one result with details', async () => {
+  await addPersonToDB(now, {
+    handle: 'singledetails',
+    displayName: 'Test Person Details',
+  })
+
+  const query = personRefs.personByHandleQuery('singledetails')
+
+  const result = await checkDocumentInQueryExists(query, {
+    auth: authData,
+    details: { step: 'after-capture' },
+  })
+
+  expect(result?.id).toBe(TestPersonID1)
+  expect(result?.displayName).toBe('Test Person Details')
+  expect(vi.mocked(logger.error)).not.toHaveBeenCalled()
 })
