@@ -85,7 +85,9 @@ Round 1 — which of the contested tasks stay in the run (tasks 1, 2 and 5 hold
 up; their design questions follow in round 2):
 
 1. Task 3 (snapshot-diff helper): drop it, or build only the before/run/after
-   wrapper?
+   wrapper? Owner's note: the task was about making the repetitive 4-line
+   pattern in each emulator test shorter and more readable — which is the
+   wrapper. Awaiting a confirmed pick.
 2. Task 4 (mask after comparison): reframe to "a masked field whose value
    changes shows as changed" — as the new default, behind an opt-in option, or
    drop?
