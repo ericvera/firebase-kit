@@ -87,7 +87,13 @@ up; their design questions follow in round 2):
 1. Task 3 (snapshot-diff helper): drop it, or build only the before/run/after
    wrapper? Owner's note: the task was about making the repetitive 4-line
    pattern in each emulator test shorter and more readable — which is the
-   wrapper. Awaiting a confirmed pick.
+   wrapper. Two shapes are on the table: (i) keep `getDBSnapshot` for the
+   before snapshot and add one call that replaces the after/changes/diff lines,
+   suggested by the owner; (ii) one call that takes the code under test as a
+   callback. Driver recommends (i): the code under test stays a plain statement,
+   so its return value and thrown errors need no special handling. Whether a
+   snapshot already carries its refs (so the new call need not take them again)
+   is for the planner to check. Awaiting a confirmed pick.
 2. Task 4 (mask after comparison): reframe to "a masked field whose value
    changes shows as changed" — as the new default, behind an opt-in option, or
    drop?
