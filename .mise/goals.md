@@ -153,7 +153,7 @@ What the descriptions change against the investigation:
   `undefined` in its position**, so the result lines up with the refs passed
   in. It is neither skipped nor thrown.
 
-- **Task 5 (task log label) — in scope, `taskName` becomes optional**, as the
+- **Superseded on 2026-11-13: the owner removed `taskName` outright at review, and the release is breaking with a `BREAKING CHANGE:` footer (major on all three packages). See `## Amendments` in spec.md.** **Task 5 (task log label) — in scope, `taskName` becomes optional**, as the
   task description asks. Removing it is a later, breaking release and is out of
   scope here.
 
@@ -193,7 +193,7 @@ What the descriptions change against the investigation:
   `"/String (before)/"` on the before side and `"/String (after)/"` on the
   after side, and likewise for every other type token.
 
-- **Release — one regular feature.** Everything on this branch squashes into one
+- **Superseded on 2026-11-13: the owner removed `taskName` outright at review, and the release is breaking with a `BREAKING CHANGE:` footer (major on all three packages). See `## Amendments` in spec.md.** **Release — one regular feature.** Everything on this branch squashes into one
   `feat:` commit with no `BREAKING CHANGE:` footer; the owner chose to ship the
   changed diff output as a regular feature.
 
@@ -413,4 +413,4 @@ Round 3 raised no blocking finding. Two minor findings stand as notes:
 - "Additive" overstates the `taskName` change. It is additive for callers that
   pass the option. Code that reads `taskName` from an `EnqueueTaskOptions` value
   now gets `string | undefined` and, under a strict lint config, a deprecation
-  error. The release stays a plain `feat:` as the owner chose.
+  error. (Superseded on 2026-11-13: `taskName` is removed and the release is breaking.)
