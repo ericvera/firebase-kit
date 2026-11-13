@@ -89,6 +89,10 @@ the tasks writes data or adds migrations.
   README example at `firebase-kit-admin/README.md:527-550` moves to the new
   call.
 
+- **Task 2 (`getDocuments(refs)`) — a missing document comes back as
+  `undefined` in its position**, so the result lines up with the refs passed
+  in. It is neither skipped nor thrown.
+
 ## Assumptions
 
 - Task 3: the planner checks whether a snapshot already carries its refs; if it
@@ -106,12 +110,15 @@ Asked, awaiting the owner's pick:
    drop?
 2. Task 6 (spike on `server.deps.inline`): its own branch, a written evaluation
    in this run, or evaluate and build the winner in this run?
-3. Task 2: what a missing ref returns (`undefined` in its slot, skipped, or
-   throw).
+3. Task 5: `taskName` stays required with `data.action` preferred when present,
+   or becomes optional, or the task is dropped.
+
+The owner asked for the motivation behind tasks 4 and 6. The tasks arrived as
+titles only and their ids appear nowhere in this repo, so the motivation given
+back was inferred from the code and the client README, not from a task
+description.
 
 Next round:
 
-- Task 5: `taskName` stays required with `data.action` preferred when present,
-  or becomes optional.
 - Task 4, if kept as the new default: whether the release treats the changed
   diff output as breaking.
