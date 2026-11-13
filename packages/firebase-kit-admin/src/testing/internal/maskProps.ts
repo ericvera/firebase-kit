@@ -1,22 +1,31 @@
-const getTypeToken = (value: unknown): string => {
+const getTypeName = (value: unknown): string => {
   if (value === null) {
-    return '/Null/'
+    return 'Null'
   }
 
   if (Array.isArray(value)) {
-    return '/Array/'
+    return 'Array'
   }
 
   switch (typeof value) {
     case 'string':
-      return '/String/'
+      return 'String'
     case 'number':
-      return '/Number/'
+      return 'Number'
     case 'boolean':
-      return '/Boolean/'
+      return 'Boolean'
     default:
-      return '/Map/'
+      return 'Map'
   }
+}
+
+export const getTypeToken = (
+  value: unknown,
+  label?: 'before' | 'after',
+): string => {
+  const typeName = getTypeName(value)
+
+  return label ? `/${typeName} (${label})/` : `/${typeName}/`
 }
 
 // NOTE: Currently only works with props that exist in the top level of the

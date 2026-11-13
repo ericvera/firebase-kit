@@ -553,7 +553,10 @@ export const { createCallableRequest, createHandlerRequestData } =
 An emulator-backed test then snapshots the database before and after the code
 under test and pins the printable diff. `getDBChanges` takes per-collection masks
 for fields whose values are not stable enough to assert on, keyed by the app's
-own collection names. This example needs a running Firestore emulator and the
+own collection names. A masked field whose value changed still shows, as a `-` /
+`+` pair whose tokens read `(before)` and `(after)` (for example
+`"/String (before)/"` and `"/String (after)/"`), while an unchanged masked field
+keeps the plain token. This example needs a running Firestore emulator and the
 setup file above.
 
 ```typescript

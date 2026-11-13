@@ -98,6 +98,95 @@ it('applies masks per collection', () => {
   `)
 })
 
+it('labels a masked field that changed on a modified document', () => {
+  const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
+  const after = createEntry('entry-1', { name: 'Final', secret: 'b' }, 2000)
+
+  const changes = getDBChanges<Collection>([before], [after], {
+    entries: ['secret'],
+  })
+
+  // Verify: the overwritten secret shows as a `-` / `+` pair alongside the
+  // visible change, without revealing either value
+  expect(changes.modified.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "  Object {
+    -   "name": "Draft",
+    -   "secret": "/String (before)/",
+    +   "name": "Final",
+    +   "secret": "/String (after)/",
+      }",
+    ]
+  `)
+})
+
+it('shows a modified document whose only change is a masked field', () => {
+  const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
+  const after = createEntry('entry-1', { name: 'Draft', secret: 'b' }, 2000)
+
+  const changes = getDBChanges<Collection>([before], [after], {
+    entries: ['secret'],
+  })
+
+  // Verify: the masked change alone is enough to produce a diff body
+  expect(changes.modified.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "  Object {
+        "name": "Draft",
+    -   "secret": "/String (before)/",
+    +   "secret": "/String (after)/",
+      }",
+    ]
+  `)
+})
+
+it('keeps the plain token for an unchanged masked field on a modified document', () => {
+  const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
+  const after = createEntry('entry-1', { name: 'Final', secret: 'a' }, 2000)
+
+  const changes = getDBChanges<Collection>([before], [after], {
+    entries: ['secret'],
+  })
+
+  expect(changes.modified.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "  Object {
+    -   "name": "Draft",
+    +   "name": "Final",
+        "secret": "/String/",
+      }",
+    ]
+  `)
+})
+
+it('labels a masked timestamp that was rewritten', () => {
+  const before = createEntry(
+    'entry-1',
+    { at: Timestamp.fromMillis(1000) },
+    1000,
+  )
+  const after = createEntry('entry-1', { at: Timestamp.fromMillis(5000) }, 2000)
+
+  const changes = getDBChanges<Collection>([before], [after], {
+    entries: ['at'],
+  })
+
+  // Verify: there is no timestamp special case — the normalized index differs,
+  // so the masked field reads as changed
+  expect(changes.modified.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "  Object {
+    -   "at": "/String (before)/",
+    +   "at": "/String (after)/",
+      }",
+    ]
+  `)
+})
+
 it('masks nothing when no masks are given', () => {
   const entry = createEntry('entry-1', { secret: 'entry-secret' }, 1000)
 

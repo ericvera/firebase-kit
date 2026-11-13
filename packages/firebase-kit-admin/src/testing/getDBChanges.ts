@@ -8,6 +8,7 @@ import {
   UnmodifiedDocumentSnapshot,
 } from './internal/DocumentChangeSnapshot.js'
 import { extractTimestamps } from './internal/extractTimestamps.js'
+import { maskModifiedProps } from './internal/maskModifiedProps.js'
 import { maskProps } from './internal/maskProps.js'
 import { normalizeData } from './internal/normalizeData.js'
 
@@ -73,18 +74,18 @@ export const getDBChanges = <TCollection extends string = string>(
   // Process added and modified docs
   afterDocsNormalized.forEach(
     ({ doc: afterDoc, normalizedData: afterNormalizedData }) => {
-      const afterMaskedData = maskProps(
-        afterNormalizedData,
-        afterDoc.ref.parent.id,
-        maskKeys,
-      )
-
       // Get added docs
       const isAdded = beforeDocs.every(
         (beforeDoc) => beforeDoc.ref.path !== afterDoc.ref.path,
       )
 
       if (isAdded) {
+        const afterMaskedData = maskProps(
+          afterNormalizedData,
+          afterDoc.ref.parent.id,
+          maskKeys,
+        )
+
         result.added.push(
           new AddedDocumentSnapshot(afterDoc, afterMaskedData, afterDocs),
         )
@@ -102,9 +103,10 @@ export const getDBChanges = <TCollection extends string = string>(
 
       const { doc: beforeDoc, normalizedData: beforeNormalizedData } =
         beforeDocData
-      const beforeMaskedData = maskProps(
+      maskModifiedProps(
         beforeNormalizedData,
-        beforeDoc.ref.parent.id,
+        afterNormalizedData,
+        afterDoc.ref.parent.id,
         maskKeys,
       )
 
@@ -113,8 +115,8 @@ export const getDBChanges = <TCollection extends string = string>(
           new ModifiedDocumentSnapshot(
             beforeDoc,
             afterDoc,
-            beforeMaskedData,
-            afterMaskedData,
+            beforeNormalizedData,
+            afterNormalizedData,
             afterDocs,
           ),
         )

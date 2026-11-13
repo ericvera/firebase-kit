@@ -53,6 +53,36 @@ it('renders the envelope with a section per change', () => {
   `)
 })
 
+it('renders a body for a document whose only change is masked', () => {
+  const before = createDoc(
+    'entries/entry-1',
+    { name: 'Draft', secret: 'a' },
+    1000,
+  )
+  const after = createDoc(
+    'entries/entry-1',
+    { name: 'Draft', secret: 'b' },
+    2000,
+  )
+
+  const changes = getDBChanges([before], [after], { entries: ['secret'] })
+
+  // Verify: the masked change prints as a labelled pair rather than leaving the
+  // MODIFIED section empty
+  expect(getDBChangesDiff(changes)).toMatchInlineSnapshot(`
+    "DB DIFF
+
+    --------------------------------
+     MODIFIED (path: entries/[ID])
+    --------------------------------
+      Object {
+        "name": "Draft",
+    -   "secret": "/String (before)/",
+    +   "secret": "/String (after)/",
+      }"
+  `)
+})
+
 it('renders just the header when nothing changed', () => {
   const stable = createDoc('entries/stable', { name: 'stable' }, 1000)
 

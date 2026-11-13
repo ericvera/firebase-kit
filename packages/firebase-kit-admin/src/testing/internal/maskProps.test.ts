@@ -1,5 +1,19 @@
 import { expect, it } from 'vitest'
-import { maskProps } from './maskProps.js'
+import { getTypeToken, maskProps } from './maskProps.js'
+
+it('builds a plain type token without a label', () => {
+  expect(getTypeToken('value')).toBe('/String/')
+  expect(getTypeToken({ nested: true })).toBe('/Map/')
+})
+
+it('adds the label inside the type token', () => {
+  expect(getTypeToken('value', 'before')).toBe('/String (before)/')
+  expect(getTypeToken(null, 'after')).toBe('/Null (after)/')
+  expect(getTypeToken([1], 'before')).toBe('/Array (before)/')
+  expect(getTypeToken(7, 'after')).toBe('/Number (after)/')
+  expect(getTypeToken(true, 'before')).toBe('/Boolean (before)/')
+  expect(getTypeToken({ nested: true }, 'after')).toBe('/Map (after)/')
+})
 
 it('replaces a masked string with the string type token', () => {
   const data = { token: 'super-secret', keep: 'visible' }

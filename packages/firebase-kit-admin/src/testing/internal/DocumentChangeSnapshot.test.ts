@@ -91,8 +91,8 @@ it('returns no diff for a modified document whose normalized data matches', () =
     [afterDoc],
   )
 
-  // Verify: a masked field changing under the mask leaves nothing visible, and
-  // "no visual difference" is reported as no diff at all
+  // Verify: equal data yields "no visual difference", which is reported as no
+  // diff at all
   expect(snapshot.getDiff()).toBeUndefined()
 })
 
