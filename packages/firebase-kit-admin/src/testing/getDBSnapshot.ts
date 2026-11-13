@@ -27,9 +27,8 @@ const isTestableDBRef = (input: SnapshotInput): input is TestableDBRef =>
  * Reads every document behind the given refs or queries into a flat list and
  * returns it together with the inputs it came from. An emulator-backed test
  * takes one snapshot before the code under test runs, then hands it to
- * `getDBDiffSince`, which re-reads its `refs` for the after snapshot. A test
- * that needs the changes object instead takes the after snapshot itself and
- * feeds the pair to `getDBChanges`.
+ * `getDBChangesDiff` or `expectNoDBChanges`, which re-read its `refs` for the
+ * after snapshot.
  */
 export const getDBSnapshot = async (
   inputs: SnapshotInput | SnapshotInput[],

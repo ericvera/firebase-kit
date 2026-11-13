@@ -7,11 +7,7 @@ import {
   TestSpaceID1,
 } from '../../__test__/db/index.js'
 import { setFakeTimer } from '../../__test__/utils/setFakeTimer.js'
-import {
-  getDBChanges,
-  getDBChangesDiff,
-  getDBSnapshot,
-} from '../../testing/index.js'
+import { getDBChangesDiff, getDBSnapshot } from '../../testing/index.js'
 
 const refs = [spaceRefs.allQuery()]
 
@@ -35,11 +31,7 @@ it('allows writing within batch', async () => {
     })
   })
 
-  const afterSnapshot = await getDBSnapshot(refs)
-  const changes = getDBChanges(beforeSnapshot, afterSnapshot)
-  const diff = getDBChangesDiff(changes)
-
-  expect(diff).toMatchInlineSnapshot(`
+  expect(await getDBChangesDiff(beforeSnapshot)).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------
@@ -76,11 +68,7 @@ it('commits all batch operations atomically', async () => {
     })
   })
 
-  const afterSnapshot = await getDBSnapshot(refs)
-  const changes = getDBChanges(beforeSnapshot, afterSnapshot)
-  const diff = getDBChangesDiff(changes)
-
-  expect(diff).toMatchInlineSnapshot(`
+  expect(await getDBChangesDiff(beforeSnapshot)).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------

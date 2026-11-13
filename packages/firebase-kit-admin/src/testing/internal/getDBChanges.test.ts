@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore'
 import { expect, it } from 'vitest'
-import { createDBSnapshot } from '../__test__/utils/createDBSnapshot.js'
-import { createDocSnapshot } from '../__test__/utils/createDocSnapshot.js'
+import { createDBSnapshot } from '../../__test__/utils/createDBSnapshot.js'
+import { createDocSnapshot } from '../../__test__/utils/createDocSnapshot.js'
 import { getDBChanges } from './getDBChanges.js'
 
 type Collection = 'entries' | 'spaces'

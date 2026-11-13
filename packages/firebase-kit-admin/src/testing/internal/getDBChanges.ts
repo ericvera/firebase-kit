@@ -1,22 +1,20 @@
-import type { DBSnapshot } from './getDBSnapshot.js'
-import { ascCompare } from './internal/ascCompare.js'
-import type { DBSnapshotChanges } from './internal/DocumentChangeSnapshot.js'
+import type { DBSnapshot } from '../getDBSnapshot.js'
+import { ascCompare } from './ascCompare.js'
+import type { DBSnapshotChanges } from './DocumentChangeSnapshot.js'
 import {
   AddedDocumentSnapshot,
   ModifiedDocumentSnapshot,
   RemovedDocumentSnapshot,
   UnmodifiedDocumentSnapshot,
-} from './internal/DocumentChangeSnapshot.js'
-import { extractTimestamps } from './internal/extractTimestamps.js'
-import { maskModifiedProps } from './internal/maskModifiedProps.js'
-import { maskProps } from './internal/maskProps.js'
-import { normalizeData } from './internal/normalizeData.js'
+} from './DocumentChangeSnapshot.js'
+import { extractTimestamps } from './extractTimestamps.js'
+import { maskModifiedProps } from './maskModifiedProps.js'
+import { maskProps } from './maskProps.js'
+import { normalizeData } from './normalizeData.js'
 
 /**
- * Diffs two `getDBSnapshot` results into added, modified and removed documents.
- * `masks` drops per-collection fields whose values are not stable enough to
- * assert on; the type parameter lets an app key it by its own collection enum
- * so a typo in a collection name fails to compile.
+ * Diffs two snapshots into the added, removed, modified and unmodified
+ * documents that `getDBChangesDiff` and `expectNoDBChanges` render.
  *
  * Both snapshots' `docs` arrays are sorted in place.
  */
