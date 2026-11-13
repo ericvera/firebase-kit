@@ -174,10 +174,20 @@ What the descriptions change against the investigation:
   `firebase/functions` and `firebase/app` mocks, not only the IndexedDB fake).
   `firebase-kit-protocol` needs no inlining and is not listed.
 
+- **Task 4 (mask after comparison) — in scope, as the new default.** A masked
+  field whose value changed shows as a `-` / `+` pair of lines that both print
+  the mask token, and a document whose only change is a masked field no longer
+  prints an empty body. There is no opt-in switch. Existing consumer snapshots
+  where a masked field was overwritten change once.
+
+- **Release — one regular feature.** Everything on this branch squashes into one
+  `feat:` commit with no `BREAKING CHANGE:` footer; the owner chose to ship the
+  changed diff output as a regular feature.
+
 ## Assumptions
 
 - Task 3: the helper's name is the planner's to propose.
-- Task 4, if kept — the driver's reasoning, for the planner to confirm against
+- Task 4 — the driver's reasoning, for the planner to confirm against
   the code: the change need not post-process rendered values. A mask token is
   always a one-line string, and the masking step for a modified document has
   both raw values at hand, so a masked field whose raw values differ can be
@@ -350,11 +360,18 @@ for its token.
   requirement to the admin README and give the full set of reasons in the
   client README.
 
-## Open questions
+## Proposal
 
-Asked, awaiting the owner's pick:
-
-1. Task 4 (mask after comparison): as the new default released as a regular
-   feature, behind an opt-in option, or drop. The owner asked whether it is
-   possible without a large rewrite, how it would work, and why it was filed;
-   answered from the task description and the two investigations.
+- **Issue:** five of the six backlog tasks hold up after investigation — two
+  admin read helpers, a shorter snapshot-diff call, visible changes to masked
+  fields, and an optional `taskName`; the sixth, the `server.deps.inline` spike,
+  is not worth building.
+- **Approach:** add a docs-from-query helper and `getDocuments(refs)` (typed
+  `{ id, ...data }`, optional reader, a missing document is `undefined`); add
+  one testing call that takes the after snapshot from the refs the before
+  snapshot remembers and returns the diff; print a changed masked value as `-` /
+  `+` lines by default; make `taskName` optional with `data.action` as the
+  fallback label; fix the two README gaps about `server.deps.inline`. One
+  `feat:` release, nothing breaking.
+- **Skips:** none. The run adds public exports across three areas of the admin
+  package, so spec and critic both run.
