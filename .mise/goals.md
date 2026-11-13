@@ -174,11 +174,22 @@ What the descriptions change against the investigation:
   `firebase/functions` and `firebase/app` mocks, not only the IndexedDB fake).
   `firebase-kit-protocol` needs no inlining and is not listed.
 
-- **Task 4 (mask after comparison) — in scope, as the new default.** A masked
-  field whose value changed shows as a `-` / `+` pair of lines that both print
-  the mask token, and a document whose only change is a masked field no longer
-  prints an empty body. There is no opt-in switch. Existing consumer snapshots
-  where a masked field was overwritten change once.
+- **Task 4 (masked field changes) — in scope, as the new default, through
+  distinct mask tokens.** This replaces the earlier "both lines print the same
+  token" decision. In a modified document, a masked field whose value changed
+  gets one token on the before side and a different token on the after side —
+  the existing type token with a label added — so plain jest-diff prints the
+  `-` / `+` pair exactly as it prints any other change. A masked field that did
+  not change, and every masked field of an added or removed document, keeps the
+  plain token (`"/String/"`), so snapshots without a masked change are
+  untouched. The label depends only on whether the value changed, never on the
+  value, so it is stable from run to run for randomly generated values. A
+  document whose only change is a masked field no longer prints an empty body.
+  There is no opt-in switch and no special case for timestamps: a masked
+  Timestamp that was rewritten shows as changed too (the owner rarely masks
+  timestamps, because the timestamp index already shows their changes). No new
+  dependency — `pretty-format` is not added — and no editing of printed text.
+  The label wording is the open question below.
 
 - **Release — one regular feature.** Everything on this branch squashes into one
   `feat:` commit with no `BREAKING CHANGE:` footer; the owner chose to ship the
@@ -187,14 +198,10 @@ What the descriptions change against the investigation:
 ## Assumptions
 
 - Task 3: the helper's name is the planner's to propose.
-- Task 4 — the driver's reasoning, for the planner to confirm against
-  the code: the change need not post-process rendered values. A mask token is
-  always a one-line string, and the masking step for a modified document has
-  both raw values at hand, so a masked field whose raw values differ can be
-  given placeholders that the comparison sees as different and that print
-  identically. jest-diff's `diffLinesUnified2`, which compares one pair of line
-  arrays and displays another, is a second candidate. Neither changes a public
-  signature.
+- Task 4 — the driver's reasoning, for the planner to confirm against the code:
+  a mask token is always a one-line string, and the masking step for a modified
+  document has both values at hand, so it can decide per masked field whether
+  to emit the plain token or the labeled pair. No public signature changes.
 - Tasks 1 and 2 are in scope and share one design (typed `{ id, ...data }`
   results, optional `TransactionReader`).
 - Task 5: a `taskName` that is passed still labels the log lines, `data.action`
@@ -384,20 +391,16 @@ rewritten (the README masks `updated`). The owner's answer: they rarely mask
 timestamps, since the timestamp index already shows changes, so no special case
 for timestamps is needed — every masked field that changed shows as changed.
 
-The owner then questioned the approach itself and proposed a per-field "version
-index" on the mask token, shown only when that field changed and stable from
-run to run even for randomly generated values. Awaiting the owner's pick:
+The owner then proposed distinct tokens for a changed masked field instead of
+identical lines, and chose that approach (recorded under Decisions). Awaiting
+the owner's pick:
 
-1. Task 4 approach: (i) the owner's version index — a changed masked field
-   gets distinct tokens on the before and after side, so plain jest-diff prints
-   the pair with no new dependency and no editing of printed text; (ii)
-   identical `"/String/"` lines through `diffLinesUnified2` and a new direct
-   `pretty-format` dependency (the planner's route); (iii) identical lines by
-   tagging the placeholders and stripping the tags from the printed text.
-2. If (i): the token format — `/String v1/` → `/String v2/`, or
-   `/String 0000/` → `/String 0001/` mirroring timestamps. The index is per
-   field (before and after), not global like the timestamp index, so the same
-   number on two fields would not mean the same value.
+1. The label on a changed masked field's tokens. Candidates, the last two the
+   owner's own: `/String v1/` → `/String v2/`; `/String (before)/` →
+   `/String (after)/`; `/String (initial)/` → `/String (changed)/`. Driver
+   recommends before/after: it is the vocabulary the testing helpers already use
+   for the two snapshots, and "initial" can read as the value the field was
+   first created with, which the before value need not be.
 
 Minor critic findings to pass to the planner with the answer: 01_02 cites line
 numbers past the end of `internal/DocumentChangeSnapshot.ts` (the method is at
