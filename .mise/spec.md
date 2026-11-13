@@ -421,6 +421,7 @@ kept as type-only exports. The same `BREAKING CHANGE:` footer names it.
 | `03_03_masked_timestamp_numbering.md` | Masks before normalizing so masked fields leave the `/Timestamp NNNN/` numbering; a masked Timestamp prints `/Timestamp/` instead of `/String/` | `src/testing/internal/getDBChanges.ts`, `src/testing/internal/maskProps.ts`, `src/testing/internal/maskModifiedProps.ts` |
 | `03_04_readme_two_call_api.md` | Moves the admin README's testing section and API reference to `getDBChangesDiff(before)` / `expectNoDBChanges(before)` and `DBSnapshot` | `packages/firebase-kit-admin/README.md` |
 | `04_01_task_data_requires_action.md` | Types the enqueue function and `EnqueueTaskOptions` as `TData extends { action: string }`; labels logs from `data.action` directly; deletes `getAction` and the `unnamed` fallback (breaking) | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
+| `05_01_diff_paths_any_depth.md` | `getDocPath` hashes every ancestor document id at any depth (2- and 4-segment output unchanged); the missing-ancestor error names the collection to add to `getDBSnapshot` | `src/testing/internal/DocumentChangeSnapshot.ts` |
 
 ## Amendments
 
