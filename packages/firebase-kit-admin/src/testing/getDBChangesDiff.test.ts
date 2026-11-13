@@ -1,99 +1,184 @@
-import { expect, it } from 'vitest'
+import type { Query, QueryDocumentSnapshot } from 'firebase-admin/firestore'
+import { Timestamp } from 'firebase-admin/firestore'
+import { expect, it, vi } from 'vitest'
+import { createDBSnapshot } from '../__test__/utils/createDBSnapshot.js'
 import { createDocSnapshot } from '../__test__/utils/createDocSnapshot.js'
-import { getDBChanges } from './getDBChanges.js'
 import { getDBChangesDiff } from './getDBChangesDiff.js'
+import { getDBSnapshot } from './getDBSnapshot.js'
+import { formatDBChanges } from './internal/formatDBChanges.js'
+import { getDBChanges } from './internal/getDBChanges.js'
 
-const createDoc = (
-  path: string,
-  data: Record<string, unknown>,
-  updateTimeMs: number,
-) => createDocSnapshot({ path, data, updateTimeMs })
+const createMutableQuery = (initial: QueryDocumentSnapshot[]) => {
+  const state = { docs: initial }
+  const query = { get: () => ({ docs: state.docs }) } as unknown as Query
 
-it('renders the envelope with a section per change', () => {
-  const stable = createDoc('entries/stable', { name: 'stable' }, 1000)
-  const changedBefore = createDoc('entries/changed', { name: 'before' }, 1000)
-  const changedAfter = createDoc('entries/changed', { name: 'after' }, 2000)
-  const goneDoc = createDoc('spaces/gone', { name: 'gone' }, 1000)
-  const newDoc = createDoc('spaces/new', { name: 'new' }, 3000)
+  return { state, query }
+}
 
-  const changes = getDBChanges(
-    [stable, changedBefore, goneDoc],
-    [stable, changedAfter, newDoc],
+const beforeDocs = () => [
+  createDocSnapshot({
+    path: 'spaces/space-1',
+    data: { name: 'Old', updated: 'a' },
+    updateTimeMs: 1,
+  }),
+  createDocSnapshot({
+    path: 'spaces/space-2',
+    data: { name: 'Gone' },
+    updateTimeMs: 1,
+  }),
+]
+
+const afterDocs = () => [
+  createDocSnapshot({
+    path: 'spaces/space-1',
+    data: { name: 'New', updated: 'b' },
+    updateTimeMs: 2,
+  }),
+  createDocSnapshot({
+    path: 'spaces/space-3',
+    data: { name: 'Added', updated: 'c' },
+    updateTimeMs: 2,
+  }),
+]
+
+it('returns the formatted changes since the before snapshot', async () => {
+  const { state, query } = createMutableQuery(beforeDocs())
+  const before = await getDBSnapshot(query)
+  state.docs = afterDocs()
+
+  const diff = await getDBChangesDiff(before)
+
+  const expected = formatDBChanges(
+    getDBChanges(createDBSnapshot(beforeDocs()), createDBSnapshot(afterDocs())),
   )
 
-  // Verify: the `DB DIFF` header, one headed section per added, removed and
-  // modified document with its normalized path, and no section for the
-  // unmodified one
-  expect(getDBChangesDiff(changes)).toMatchInlineSnapshot(`
+  // Verify: added, modified and removed docs all render exactly as the
+  // explicit snapshot/changes/diff sequence would
+  expect(diff).toBe(expected)
+  expect(diff).toContain('ADDED (path: spaces/[ID])')
+  expect(diff).toContain('MODIFIED (path: spaces/[ID])')
+  expect(diff).toContain('REMOVED (path: spaces/[ID])')
+})
+
+it('passes masks through to getDBChanges', async () => {
+  const { state, query } = createMutableQuery(beforeDocs())
+  const before = await getDBSnapshot(query)
+  state.docs = afterDocs()
+
+  const masks = { spaces: ['updated'] }
+  const masked = await getDBChangesDiff(before, masks)
+  const unmasked = await getDBChangesDiff(before)
+
+  const expected = formatDBChanges(
+    getDBChanges(
+      createDBSnapshot(beforeDocs()),
+      createDBSnapshot(afterDocs()),
+      masks,
+    ),
+  )
+
+  expect(masked).toBe(expected)
+  expect(masked).not.toBe(unmasked)
+})
+
+it('gives the same diff when called twice on one before snapshot', async () => {
+  const { state, query } = createMutableQuery(beforeDocs())
+  const before = await getDBSnapshot(query)
+  state.docs = afterDocs()
+
+  const first = await getDBChangesDiff(before)
+  const second = await getDBChangesDiff(before)
+
+  // Verify: the first call's in-place sort of before.docs leaves the second
+  // call's diff unchanged
+  expect(second).toBe(first)
+})
+
+it('accepts a hand-built snapshot', async () => {
+  const { state, query } = createMutableQuery(beforeDocs())
+  const taken = await getDBSnapshot(query)
+  state.docs = afterDocs()
+
+  const expected = await getDBChangesDiff(taken)
+  const diff = await getDBChangesDiff(createDBSnapshot(beforeDocs(), [query]))
+
+  // Verify: nothing ties refs to getDBSnapshot, so any { docs, refs } value
+  // re-reads its refs the same way
+  expect(diff).toBe(expected)
+})
+
+it('re-reads every input, refs object and bare query', async () => {
+  const refs = createMutableQuery([])
+  const bare = createMutableQuery([])
+  const refsGet = vi.spyOn(refs.query, 'get')
+  const bareGet = vi.spyOn(bare.query, 'get')
+
+  const before = await getDBSnapshot([
+    { testAllQuery: () => refs.query },
+    bare.query,
+  ])
+  refs.state.docs = [createDocSnapshot({ path: 'spaces/space-1', data: {} })]
+  bare.state.docs = [createDocSnapshot({ path: 'entries/entry-1', data: {} })]
+
+  const diff = await getDBChangesDiff(before)
+
+  expect(refsGet).toHaveBeenCalledTimes(2)
+  expect(bareGet).toHaveBeenCalledTimes(2)
+  expect(diff).toContain('ADDED (path: spaces/[ID])')
+  expect(diff).toContain('ADDED (path: entries/[ID])')
+})
+
+it('keeps unmasked timestamp numbers stable when a timestamp is masked', async () => {
+  const timestampedDocs = (
+    atMs: number,
+    updatedMs: number,
+    updateTimeMs: number,
+  ) => [
+    createDocSnapshot({
+      path: 'spaces/space-1',
+      data: {
+        at: Timestamp.fromMillis(atMs),
+        updated: Timestamp.fromMillis(updatedMs),
+      },
+      updateTimeMs,
+    }),
+  ]
+  const diffWith = async (masks?: { spaces: string[] }) => {
+    const { state, query } = createMutableQuery(timestampedDocs(1000, 5000, 1))
+    const before = await getDBSnapshot(query)
+    state.docs = timestampedDocs(9000, 6000, 2)
+
+    return getDBChangesDiff(before, masks)
+  }
+
+  const unmasked = await diffWith()
+  const masked = await diffWith({ spaces: ['at'] })
+
+  // Verify: without the mask `at` takes index 0000, with it `updated` does
+  expect(unmasked).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------
-     ADDED (path: spaces/[ID])
-    --------------------------------
-    + Object {
-    +   "name": "new",
-    + }
-    --------------------------------
-
-    --------------------------------
-     MODIFIED (path: entries/[ID])
+     MODIFIED (path: spaces/[ID])
     --------------------------------
       Object {
-    -   "name": "before",
-    +   "name": "after",
-      }
-    --------------------------------
-
-    --------------------------------
-     REMOVED (path: spaces/[ID])
-    --------------------------------
-    -   "name": "gone",
-    - }
-    + Object {}"
+    -   "at": "/Timestamp 0000/",
+    -   "updated": "/Timestamp 0001/",
+    +   "at": "/Timestamp 0003/",
+    +   "updated": "/Timestamp 0002/",
+      }"
   `)
-})
-
-it('renders just the header when nothing changed', () => {
-  const stable = createDoc('entries/stable', { name: 'stable' }, 1000)
-
-  const changes = getDBChanges([stable], [stable])
-
-  expect(getDBChangesDiff(changes)).toMatchInlineSnapshot(`
+  expect(masked).toMatchInlineSnapshot(`
     "DB DIFF
 
-    "
+    --------------------------------
+     MODIFIED (path: spaces/[ID])
+    --------------------------------
+      Object {
+    -   "at": "/Timestamp (before)/",
+    -   "updated": "/Timestamp 0000/",
+    +   "at": "/Timestamp (after)/",
+    +   "updated": "/Timestamp 0001/",
+      }"
   `)
-})
-
-it('drops the leading line of an added or removed diff', () => {
-  const goneDoc = createDoc('entries/gone', { name: 'gone' }, 1000)
-
-  const changes = getDBChanges([goneDoc], [])
-  const [removed] = changes.removed
-  const rawDiff = removed?.getDiff() ?? ''
-
-  // Verify: the raw diff opens with the bare `Object {` marker, which carries
-  // no information once the section header already names the document
-  expect(rawDiff.split('\n').slice(0, 1)).toMatchInlineSnapshot(`
-    [
-      "- Object {",
-    ]
-  `)
-  expect(getDBChangesDiff(changes)).not.toContain(
-    `${rawDiff.split('\n')[0] ?? ''}\n`,
-  )
-})
-
-it('orders the sections so the output is stable across runs', () => {
-  const first = createDoc('entries/first', { name: 'first' }, 1000)
-  const second = createDoc('spaces/second', { name: 'second' }, 2000)
-
-  const changes = getDBChanges([], [first, second])
-  const inOrder = getDBChangesDiff(changes)
-
-  changes.added.reverse()
-
-  // Verify: sections are sorted before joining, so the order documents happened
-  // to be read in cannot churn a snapshot
-  expect(getDBChangesDiff(changes)).toEqual(inOrder)
 })

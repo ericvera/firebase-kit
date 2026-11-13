@@ -14,7 +14,7 @@ const getPaths = (docs: QueryDocumentSnapshot[]) =>
   docs.map((doc) => doc.ref.path)
 
 it('reads a bare query', async () => {
-  const docs = await getDBSnapshot(createQuery(['entries/entry-1']))
+  const { docs } = await getDBSnapshot(createQuery(['entries/entry-1']))
 
   // Verify: a single input is read without the caller wrapping it in an array
   expect(getPaths(docs)).toEqual(['entries/entry-1'])
@@ -23,7 +23,7 @@ it('reads a bare query', async () => {
 it('resolves a refs object to its all-documents query', async () => {
   const query = createQuery(['spaces/space-1'])
 
-  const docs = await getDBSnapshot({ testAllQuery: () => query })
+  const { docs } = await getDBSnapshot({ testAllQuery: () => query })
 
   // Verify: the duck-type is unwrapped, so a suite can name its refs rather
   // than restating each collection's query
@@ -34,7 +34,7 @@ it('flattens refs and bare queries mixed in one call, in order', async () => {
   const refsQuery = createQuery(['spaces/space-1', 'spaces/space-2'])
   const bareQuery = createQuery(['entries/entry-1'])
 
-  const docs = await getDBSnapshot([
+  const { docs } = await getDBSnapshot([
     { testAllQuery: () => refsQuery },
     bareQuery,
   ])
@@ -60,6 +60,24 @@ it('reads every query it is given', async () => {
   expect(secondGet).toHaveBeenCalledTimes(1)
 })
 
-it('returns an empty list for an empty input array', async () => {
-  expect(await getDBSnapshot([])).toEqual([])
+it('returns an empty snapshot for an empty input array', async () => {
+  const snapshot = await getDBSnapshot([])
+
+  expect(snapshot).toEqual({ docs: [], refs: [] })
+})
+
+it('carries its inputs as refs', async () => {
+  const query = createQuery(['entries/entry-1'])
+  const refsObject = { testAllQuery: () => createQuery(['spaces/space-1']) }
+
+  const single = await getDBSnapshot(query)
+  const mixed = await getDBSnapshot([refsObject, query])
+
+  // Verify: a single input is normalized to an array, and a refs object is
+  // kept as given rather than replaced by its resolved query, so a re-read
+  // calls testAllQuery again
+  expect(single.refs).toEqual([query])
+  expect(mixed.refs).toHaveLength(2)
+  expect(mixed.refs[0]).toBe(refsObject)
+  expect(mixed.refs[1]).toBe(query)
 })

@@ -105,18 +105,18 @@ yarn add --dev vitest
 
 ## Entry Points
 
-| Entry point                     | What it provides                                                                                                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `firebase-kit-admin`            | `createInit` — the per-app Admin SDK initializer an entry point calls once per cold start                                                                           |
-| `firebase-kit-admin/auth`       | `checkAuthenticated` and `checkClaimsVersion`: the two guards an authorized handler runs first                                                                      |
-| `firebase-kit-admin/callable`   | `createAPIVersionCheck`, `createOnCallGlobalOptions` and `parseCallableRequest` for grouped callables                                                               |
-| `firebase-kit-admin/errors`     | The `HttpsError` subclasses (`internal`, `unauthenticated`, `permission-denied`, `failed-precondition`, `invalid-argument`) plus `getErrorCode` / `getErrorMessage` |
-| `firebase-kit-admin/firestore`  | `createFirestoreUtils` — ref builders, `runBatch`, `runTransaction` — plus `checkDocumentExists` and `checkDocumentInQueryExists`                                   |
-| `firebase-kit-admin/mocks`      | Factories for the in-memory `firebase-admin` / `firebase-functions` mocks a vitest suite installs in `__mocks__`                                                    |
-| `firebase-kit-admin/runtime`    | `getRuntimeContext`, `inEmulator` and `checkInTestEnvironment`: where this process is actually running                                                              |
-| `firebase-kit-admin/tasks`      | `createTaskEnqueuer` — Cloud Tasks enqueueing that skips in the emulator and tolerates a duplicate id                                                               |
-| `firebase-kit-admin/testing`    | Request builders, DB snapshot/diff helpers, `expectSuccessResult`, and `registerEmulatorHooks`                                                                      |
-| `firebase-kit-admin/validation` | `validateSchemaAndTrim` — a betterbe schema failure turned into a readable `invalid-argument`                                                                       |
+| Entry point                     | What it provides                                                                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `firebase-kit-admin`            | `createInit` — the per-app Admin SDK initializer an entry point calls once per cold start                                                                                  |
+| `firebase-kit-admin/auth`       | `checkAuthenticated` and `checkClaimsVersion`: the two guards an authorized handler runs first                                                                             |
+| `firebase-kit-admin/callable`   | `createAPIVersionCheck`, `createOnCallGlobalOptions` and `parseCallableRequest` for grouped callables                                                                      |
+| `firebase-kit-admin/errors`     | The `HttpsError` subclasses (`internal`, `unauthenticated`, `permission-denied`, `failed-precondition`, `invalid-argument`) plus `getErrorCode` / `getErrorMessage`        |
+| `firebase-kit-admin/firestore`  | `createFirestoreUtils` — ref builders, `runBatch`, `runTransaction` — plus `checkDocumentExists`, `checkDocumentInQueryExists`, `getDocuments` and `getDocumentsFromQuery` |
+| `firebase-kit-admin/mocks`      | Factories for the in-memory `firebase-admin` / `firebase-functions` mocks a vitest suite installs in `__mocks__`                                                           |
+| `firebase-kit-admin/runtime`    | `getRuntimeContext`, `inEmulator` and `checkInTestEnvironment`: where this process is actually running                                                                     |
+| `firebase-kit-admin/tasks`      | `createTaskEnqueuer` — Cloud Tasks enqueueing that skips in the emulator and tolerates a duplicate id                                                                      |
+| `firebase-kit-admin/testing`    | Request builders, DB snapshot/diff helpers, `expectSuccessResult`, and `registerEmulatorHooks`                                                                             |
+| `firebase-kit-admin/validation` | `validateSchemaAndTrim` — a betterbe schema failure turned into a readable `invalid-argument`                                                                              |
 
 ## Usage
 
@@ -289,6 +289,38 @@ which is passed through to the `FunctionsInternalError` on either throw, so it
 appears in the log entry and in the error the callable's client receives — never
 put secrets in it. `runBatch` covers pure writes with no read step.
 
+`getDocumentsFromQuery` returns every document a query matches, and
+`getDocuments` reads a list of refs in one batch and returns one entry per ref,
+in order, with `undefined` where a document does not exist. Both return each
+document as `{ id, ...data }` and take an optional `TransactionReader` as their
+last argument.
+
+```typescript
+// src/spaces/getSpaces.ts
+import {
+  getDocuments,
+  getDocumentsFromQuery,
+} from 'firebase-kit-admin/firestore'
+import { db } from '../firebase/db.js'
+import { spaceRefs } from './spaceRefs.js'
+import type { DBSpace } from './spaceRefs.js'
+
+type Space = DBSpace & { id: string }
+
+export const getSpacesByHandle = (handle: string): Promise<Space[]> =>
+  getDocumentsFromQuery<Space, DBSpace>(spaceRefs.byHandle(handle))
+
+export const getSpacesById = (
+  spaceIds: string[],
+): Promise<(Space | undefined)[]> =>
+  db.runTransaction(async (reader) =>
+    getDocuments<Space, DBSpace>(
+      spaceIds.map((spaceId) => spaceRefs.doc(spaceId)),
+      reader,
+    ),
+  )
+```
+
 ### `firebase-kit-admin/errors`
 
 Every class extends `firebase-functions`' `HttpsError`, so throwing one is what
@@ -454,7 +486,10 @@ export const spaces = onCall<SpacesRequest, Promise<{ result: 'success' }>>(
 emulator it enqueues nothing, because the Cloud Tasks emulator ignores
 `scheduleTime` and would fire a delayed task the moment it is queued. A task id
 already scheduled is a duplicate of pending work, so it is logged and swallowed
-— which is what makes a repeated enqueue safe. Anything else throws.
+— which is what makes a repeated enqueue safe. Anything else throws. Both log
+lines are labeled by `data.action`, so task data must carry a string `action`.
+Data that reaches it without one at runtime rejects with a
+`FunctionsInternalError` before anything is skipped or enqueued.
 
 ```typescript
 // src/tasks/enqueueSpaceCleanup.ts
@@ -464,6 +499,7 @@ import { createTaskEnqueuer } from 'firebase-kit-admin/tasks'
 const enqueueTask = createTaskEnqueuer({ inEmulator })
 
 interface SpaceCleanupData {
+  action: 'space-cleanup'
   spaceId: string
 }
 
@@ -472,10 +508,9 @@ export const enqueueSpaceCleanup = (spaceId: string): Promise<void> =>
     queueName: 'space-cleanup',
     // Cloud Tasks rejects a second task with this id for about an hour.
     taskId: `space-cleanup-${spaceId}`,
-    data: { spaceId },
+    data: { action: 'space-cleanup', spaceId },
     delayMs: 60_000,
     dispatchDeadlineSeconds: 300,
-    taskName: 'space cleanup',
     logContext: { spaceId },
   })
 ```
@@ -518,16 +553,27 @@ export const { createCallableRequest, createHandlerRequestData } =
   })
 ```
 
-An emulator-backed test then snapshots the database before and after the code
-under test and pins the printable diff. `getDBChanges` takes per-collection masks
-for fields whose values are not stable enough to assert on, keyed by the app's
-own collection names. This example needs a running Firestore emulator and the
-setup file above.
+An emulator-backed test takes a `DBSnapshot` with `getDBSnapshot` before it
+runs the code under test. The snapshot holds the documents read (`docs`) and
+the refs they came from (`refs`). Afterwards `getDBChangesDiff(before, masks?)`
+re-reads those refs and returns the printable diff to pin with an inline
+snapshot. `expectNoDBChanges(before)` re-reads them too and fails, printing the
+diff, if any document was added, removed or modified. A rewrite with identical
+data counts as a modification, because the document's update time moved.
+
+Masks are per-collection field lists, keyed by the app's own collection names,
+for values not stable enough to assert on. A masked field whose value changed
+still shows, as a `-` / `+` pair whose tokens read `(before)` and `(after)`
+(for example `"/String (before)/"` and `"/String (after)/"`), while an
+unchanged masked field keeps the plain token. A masked Timestamp prints
+`"/Timestamp/"`. Masked fields are left out of the `/Timestamp NNNN/`
+numbering, so masking one timestamp does not shift the numbers of the others.
+This example needs a running Firestore emulator and the setup file above.
 
 ```typescript
 // src/spaces/renameSpace.emulator.test.ts
 import {
-  getDBChanges,
+  expectNoDBChanges,
   getDBChangesDiff,
   getDBSnapshot,
 } from 'firebase-kit-admin/testing'
@@ -542,10 +588,17 @@ it('renames the space', async () => {
 
   await renameSpace(undefined, 'space-1', 'Renamed')
 
-  const after = await getDBSnapshot(refs)
-  const changes = getDBChanges(before, after, { spaces: ['updated'] })
+  const diff = await getDBChangesDiff(before, { spaces: ['updated'] })
 
-  expect(getDBChangesDiff(changes)).toMatchInlineSnapshot()
+  expect(diff).toMatchInlineSnapshot()
+})
+
+it('leaves the database untouched for a missing space', async () => {
+  const before = await getDBSnapshot(refs)
+
+  await expect(renameSpace(undefined, 'missing', 'Renamed')).rejects.toThrow()
+
+  await expectNoDBChanges(before)
 })
 ```
 
@@ -560,6 +613,35 @@ environment, so it cannot be shipped by accident).
 Factories for the in-memory mocks a vitest suite re-exports from its
 `__mocks__` modules, so that a bare `vi.mock('firebase-admin/app')` picks them up.
 Each is called once at module scope, so every importer shares one state.
+
+Those mocks only reach the code under test if vitest stops externalizing this
+package — the `import 'firebase-admin/app'` that has to resolve to the mocked
+copy is the one inside `firebase-kit-admin`, not the one in your own code. The
+same goes for `firebase-admin/functions`, `firebase-admin/auth` and
+`firebase-functions`. Inline it:
+
+```typescript
+// vitest.config.ts
+import { join } from 'node:path'
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    // `src` rather than the project directory, so the `__mocks__` folder vitest
+    // resolves relative to the root is the `src/__mocks__` one the test doubles
+    // below live in. Without it, a bare `vi.mock('firebase-admin/functions')`
+    // auto-mocks the real module instead, and every factory comes back
+    // `undefined`.
+    root: join(import.meta.dirname, 'src'),
+    server: { deps: { inline: ['firebase-kit-admin'] } },
+  },
+})
+```
+
+With the `inline` entry missing, the package's own imports leave vitest's module
+graph before the mock applies and resolve to the real modules: the enqueue
+function `createTaskEnqueuer` returns calls the real `getFunctions`, so the
+dedup path below is never exercised.
 
 ```typescript
 // src/__mocks__/firebase-admin/app/index.ts
@@ -687,6 +769,10 @@ from `process.env`) follow the same shape.
 - **`checkDocumentInQueryExists(query, options)`**: At most one document. Throws
   on multiple; throws on none only when `errorIfEmpty` is given. Either throw
   carries `options.details` attached to the error.
+- **`getDocumentsFromQuery(query, reader?)`**: Every document the query matches,
+  each with its `id`, or `[]` when it matches none.
+- **`getDocuments(refs, reader?)`**: One entry per ref, in order: the document
+  with its `id`, or `undefined` when it does not exist.
 - **`TransactionReader`** / **`TransactionWriter`**: Type-only exports. Both are
   constructed by `runTransaction` and handed to its callback.
 - **`FirestoreUtilsOptions`**: `databaseId`, `emulatorDatabaseId`.
@@ -711,8 +797,8 @@ from `process.env`) follow the same shape.
 ### `firebase-kit-admin/tasks`
 
 - **`createTaskEnqueuer(dependencies)`**: Returns `enqueue(options)`.
-- **`EnqueueTaskOptions`**: `queueName`, `taskId`, `data`, `delayMs`,
-  `dispatchDeadlineSeconds`, `taskName`, `logContext`.
+- **`EnqueueTaskOptions`**: `queueName`, `taskId`, `data` (must carry a string
+  `action`), `delayMs`, `dispatchDeadlineSeconds`, `logContext`.
 - **`TaskEnqueuerDependencies`**: `inEmulator`.
 
 ### `firebase-kit-admin/testing`
@@ -723,17 +809,19 @@ from `process.env`) follow the same shape.
   `{ createCallableRequest, createHandlerRequestData }`.
 - **`createTaskRequest(data)`**: The request a task handler test feeds in
   directly.
-- **`getDBSnapshot(inputs)`**, **`getDBChanges(before, after, masks?)`**,
-  **`getDBChangesDiff(changes)`**: The before/after snapshot and printable diff.
+- **`getDBSnapshot(inputs)`**: Reads the refs or queries into a `DBSnapshot`
+  (`{ docs, refs }`).
+- **`getDBChangesDiff(before, masks?)`**: Re-reads `before.refs` and returns
+  the printable diff since it.
+- **`expectNoDBChanges(before)`**: Re-reads `before.refs` and fails with the
+  printed diff if any document was added, removed or modified.
 - **`normalizeData(data, options?)`**: Replaces Firestore Timestamps with
   `/Timestamp XXXX/` (indexed in chronological order) and Buffers with
   `/Buffer <base64url>/`, so a snapshot assertion stays stable across runs.
 - **`expectSuccessResult(response)`**, **`testGetFirestoreReset()`**.
 - **`EmulatorHooksOptions`**, **`EmulatorReset`**, **`RequestBuildersOptions`**,
-  **`TestableDBRef`**, **`SnapshotInput`**, **`NormalizeDataOptions`**,
-  **`DBSnapshotChanges`**, **`AddedDocumentSnapshot`**,
-  **`RemovedDocumentSnapshot`**, **`ModifiedDocumentSnapshot`**,
-  **`UnmodifiedDocumentSnapshot`**.
+  **`TestableDBRef`**, **`SnapshotInput`**, **`DBSnapshot`**,
+  **`NormalizeDataOptions`**.
 
 ### `firebase-kit-admin/validation`
 

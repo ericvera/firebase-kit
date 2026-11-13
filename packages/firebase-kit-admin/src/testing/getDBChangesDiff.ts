@@ -1,50 +1,23 @@
-import type { DBSnapshotChanges } from './internal/DocumentChangeSnapshot.js'
-
-const TextLine = '--------------------------------'
+import type { DBSnapshot } from './getDBSnapshot.js'
+import { getDBSnapshot } from './getDBSnapshot.js'
+import { formatDBChanges } from './internal/formatDBChanges.js'
+import { getDBChanges } from './internal/getDBChanges.js'
 
 /**
- * Renders `getDBChanges` output as the printable DB DIFF string an emulator
- * test pins with an inline snapshot. Timestamps and Buffers come out already
- * normalized (`/Timestamp 0000/`, `/Buffer .../`).
+ * Re-reads the refs `before` carries and returns the printable DB DIFF string
+ * of every document added, removed or modified since. An emulator test takes
+ * `before` with `getDBSnapshot`, runs the code under test, then pins this
+ * call's result with an inline snapshot.
+ *
+ * `masks` drops per-collection fields whose values are not stable enough to
+ * assert on. The type parameter lets an app key it by its own collection enum,
+ * so a typo in a collection name fails to compile.
  */
-export const getDBChangesDiff = (changes: DBSnapshotChanges): string => {
-  const results: string[] = []
+export const getDBChangesDiff = async <TCollection extends string = string>(
+  before: DBSnapshot,
+  masks?: Partial<Record<TCollection, string[]>>,
+): Promise<string> => {
+  const after = await getDBSnapshot(before.refs)
 
-  if (changes.added.length > 0) {
-    changes.added.forEach((snapshot) => {
-      let text = snapshot.getDiff() ?? ''
-
-      // Remove first line of text as it is not useful (only shows the object
-      // removed)
-      text = text.split('\n').slice(1).join('\n')
-
-      text = `${TextLine}\n ADDED (path: ${snapshot.normalizedPath})\n${TextLine}\n${text}`
-      results.push(text)
-    })
-  }
-
-  if (changes.removed.length > 0) {
-    changes.removed.forEach((snapshot) => {
-      let text = snapshot.getDiff() ?? ''
-
-      // Remove first line of text as it is not useful (only shows the object
-      // added)
-      text = text.split('\n').slice(1).join('\n')
-
-      text = `${TextLine}\n REMOVED (path: ${snapshot.normalizedPath})\n${TextLine}\n${text}`
-      results.push(text)
-    })
-  }
-
-  if (changes.modified.length > 0) {
-    changes.modified.forEach((snapshot) => {
-      let text = snapshot.getDiff() ?? ''
-
-      text = `${TextLine}\n MODIFIED (path: ${snapshot.normalizedPath})\n${TextLine}\n${text}`
-      results.push(text)
-    })
-  }
-
-  // Sort results to keep the order consistent across runs
-  return `DB DIFF\n\n${results.sort().join(`\n${TextLine}\n\n`)}`
+  return formatDBChanges(getDBChanges(before, after, masks))
 }

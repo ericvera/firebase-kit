@@ -136,6 +136,14 @@ With either `inline` entry missing, the chain leaves vitest's module graph befor
 the mock applies, `idb-keyval` resolves natively, and every cached read fails
 with `ReferenceError: indexedDB is not defined`.
 
+The `firebase-kit-client` entry is also what lets the `firebase/functions` and
+`firebase/app` mocks from [`firebase-kit-client/mocks`](#firebase-kit-clientmocks)
+reach the package: its callers import `httpsCallable` from `firebase/functions`
+inside each call, even when `functions` is injected, and its cached reads import
+`getApp` from `firebase/app`. Without the entry those imports resolve to the
+real Firebase SDK, so a callable test calls a deployed function instead of the
+echo mock.
+
 ## Requirements
 
 - Node.js >= 24
@@ -692,7 +700,8 @@ export const {
 A test file then declares `vi.mock('firebase/app')` (or `'firebase/functions'`,
 or `'getsetdel'`) and imports the extra helpers — `resetFirebaseAppMocks`,
 `failEntriesWith` and the rest — from the `__mocks__` module directly, since the
-real modules do not declare them.
+real modules do not declare them. None of these mocks reach the package without
+the `inline` entries in the `vitest.config.ts` above.
 
 ## API Reference
 

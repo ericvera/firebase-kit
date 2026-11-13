@@ -1,22 +1,44 @@
-const getTypeToken = (value: unknown): string => {
+import { Buffer } from 'node:buffer'
+import { Timestamp } from 'firebase-admin/firestore'
+
+const getTypeName = (value: unknown): string => {
+  if (value instanceof Timestamp) {
+    return 'Timestamp'
+  }
+
+  // Masking used to run after normalization had turned a Buffer into a string,
+  // and consumer snapshots hold that token.
+  if (Buffer.isBuffer(value)) {
+    return 'String'
+  }
+
   if (value === null) {
-    return '/Null/'
+    return 'Null'
   }
 
   if (Array.isArray(value)) {
-    return '/Array/'
+    return 'Array'
   }
 
   switch (typeof value) {
     case 'string':
-      return '/String/'
+      return 'String'
     case 'number':
-      return '/Number/'
+      return 'Number'
     case 'boolean':
-      return '/Boolean/'
+      return 'Boolean'
     default:
-      return '/Map/'
+      return 'Map'
   }
+}
+
+export const getTypeToken = (
+  value: unknown,
+  label?: 'before' | 'after',
+): string => {
+  const typeName = getTypeName(value)
+
+  return label ? `/${typeName} (${label})/` : `/${typeName}/`
 }
 
 // NOTE: Currently only works with props that exist in the top level of the

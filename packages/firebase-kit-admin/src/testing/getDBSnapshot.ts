@@ -12,17 +12,27 @@ export interface TestableDBRef {
 /** Either shape `getDBSnapshot` accepts for one collection. */
 export type SnapshotInput = TestableDBRef | Query
 
+/** What `getDBSnapshot` returns. */
+export interface DBSnapshot {
+  /** Every document read, flattened across the inputs in order. */
+  docs: QueryDocumentSnapshot[]
+  /** The inputs the documents were read from, always as an array. */
+  refs: SnapshotInput[]
+}
+
 const isTestableDBRef = (input: SnapshotInput): input is TestableDBRef =>
   'testAllQuery' in input
 
 /**
- * Reads every document behind the given refs or queries into a flat list. An
- * emulator-backed test takes one snapshot before the code under test runs and
- * one after, then feeds the pair to `getDBChanges`.
+ * Reads every document behind the given refs or queries into a flat list and
+ * returns it together with the inputs it came from. An emulator-backed test
+ * takes one snapshot before the code under test runs, then hands it to
+ * `getDBChangesDiff` or `expectNoDBChanges`, which re-read its `refs` for the
+ * after snapshot.
  */
 export const getDBSnapshot = async (
   inputs: SnapshotInput | SnapshotInput[],
-): Promise<QueryDocumentSnapshot[]> => {
+): Promise<DBSnapshot> => {
   const inputArray = Array.isArray(inputs) ? inputs : [inputs]
 
   const queries = inputArray.map((input) =>
@@ -31,5 +41,7 @@ export const getDBSnapshot = async (
 
   const results = await Promise.all(queries.map((query) => query.get()))
 
-  return results.flatMap((result) => result.docs)
+  const docs = results.flatMap((result) => result.docs)
+
+  return { docs, refs: inputArray }
 }

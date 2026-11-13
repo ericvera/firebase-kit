@@ -91,8 +91,8 @@ it('returns no diff for a modified document whose normalized data matches', () =
     [afterDoc],
   )
 
-  // Verify: a masked field changing under the mask leaves nothing visible, and
-  // "no visual difference" is reported as no diff at all
+  // Verify: equal data yields "no visual difference", which is reported as no
+  // diff at all
   expect(snapshot.getDiff()).toBeUndefined()
 })
 
@@ -147,19 +147,52 @@ it('throws when a subcollection parent is missing from the snapshot', () => {
   expect(
     () => new UnmodifiedDocumentSnapshot(childDoc, [childDoc]),
   ).toThrowErrorMatchingInlineSnapshot(
-    `[Error: Document not found for path: spaces/space-1]`,
+    `[Error: Document not found for path: spaces/space-1 (an ancestor of spaces/space-1/entries/entry-1). Add a ref or query covering the spaces collection to getDBSnapshot, so the ancestor is in the snapshot.]`,
   )
 })
 
-it('throws on a path nested deeper than one subcollection', () => {
-  const doc = createDocSnapshot({
+it('replaces every ancestor id with a hash of that ancestor document', () => {
+  const spaceDoc = createDocSnapshot({
+    path: 'spaces/space-1',
+    data: { name: 'space one' },
+  })
+  const entryDoc = createDocSnapshot({
+    path: 'spaces/space-1/entries/entry-1',
+    data: { name: 'first' },
+  })
+  const commentDoc = createDocSnapshot({
     path: 'spaces/space-1/entries/entry-1/comments/comment-1',
     data: { text: 'hi' },
   })
 
+  const snapshot = new UnmodifiedDocumentSnapshot(commentDoc, [
+    spaceDoc,
+    entryDoc,
+    commentDoc,
+  ])
+
+  // Verify: each ancestor id is derived from that ancestor's own content, at
+  // any depth
+  expect(snapshot.normalizedPath).toMatchInlineSnapshot(
+    `"spaces/asbh2OkU2iqwHWY9iJGtlwaa/entries/ohLlfsbXahIoRohUudbLTAaa/comments/[ID]"`,
+  )
+})
+
+it('throws naming the missing ancestor at any depth', () => {
+  const spaceDoc = createDocSnapshot({
+    path: 'spaces/space-1',
+    data: { name: 'space one' },
+  })
+  const commentDoc = createDocSnapshot({
+    path: 'spaces/space-1/entries/entry-1/comments/comment-1',
+    data: { text: 'hi' },
+  })
+
+  // Verify: the error names the missing ancestor and the collection to add to
+  // the snapshot
   expect(
-    () => new UnmodifiedDocumentSnapshot(doc, [doc]),
+    () => new UnmodifiedDocumentSnapshot(commentDoc, [spaceDoc, commentDoc]),
   ).toThrowErrorMatchingInlineSnapshot(
-    `[Error: Path segments longer than 4 not supported yet.]`,
+    `[Error: Document not found for path: spaces/space-1/entries/entry-1 (an ancestor of spaces/space-1/entries/entry-1/comments/comment-1). Add a ref or query covering the spaces/space-1/entries collection to getDBSnapshot, so the ancestor is in the snapshot.]`,
   )
 })

@@ -8,7 +8,7 @@ import {
 } from '../../__test__/db/index.js'
 import { setFakeTimer } from '../../__test__/utils/setFakeTimer.js'
 import {
-  getDBChanges,
+  expectNoDBChanges,
   getDBChangesDiff,
   getDBSnapshot,
 } from '../../testing/index.js'
@@ -39,9 +39,8 @@ it('allows reading and writing within transaction', async () => {
   })
 
   // Ensure that the name was updated
-  const afterSnapshot = await getDBSnapshot(refs)
-  const changes = getDBChanges(beforeSnapshot, afterSnapshot)
-  const diff = getDBChangesDiff(changes)
+  const diff = await getDBChangesDiff(beforeSnapshot)
+
   expect(diff).toMatchInlineSnapshot(`
     "DB DIFF
 
@@ -58,4 +57,17 @@ it('allows reading and writing within transaction', async () => {
         "v": 1,
       }"
   `)
+})
+
+it('leaves the database untouched when the transaction only reads', async () => {
+  await addSpaceToDB(now)
+
+  const beforeSnapshot = await getDBSnapshot(refs)
+
+  await testDB.runTransaction(async (reader) => {
+    const snapshot = await reader.get(spaceRefs.doc(TestSpaceID1))
+    expect(snapshot.exists).toBe(true)
+  })
+
+  await expectNoDBChanges(beforeSnapshot)
 })
