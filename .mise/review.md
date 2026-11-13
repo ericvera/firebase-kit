@@ -1,33 +1,42 @@
 # Review
 
-Range: `origin/main...HEAD` — 24 files, all under `packages/`.
+Range: `origin/main...HEAD`, all under `packages/`. The release is breaking: the squashed commit needs one `BREAKING CHANGE:` footer naming every item marked **breaking** below (major on all three packages).
 
 ## Tasks
 
-- **01_01** (`c3ac45e`) — `getDocumentsFromQuery(query, reader?)` and `getDocuments(refs, reader?)` added to `firebase-kit-admin/firestore`; both return typed `{ id, ...data }`, and `getDocuments` returns `undefined` in the position of a missing document. Verify: `yarn test:emulator` (`getDocumentsFromQuery.emulator.test.ts`, `getDocuments.emulator.test.ts`), and the new README usage snippet.
-- **01_02** (`f06b5d3`) — in a modified document, a masked field whose value changed prints `"/String (before)/"` and `"/String (after)/"`; unchanged masked fields and added or removed documents print as before. Verify: `yarn test:unit`, and read the pinned output in `src/testing/getDBChangesDiff.test.ts` and `src/testing/getDBChanges.test.ts`.
-- **01_03** (`5b68afe`) — `getDBDiffSince(before, masks?)` added to `firebase-kit-admin/testing`; `getDBSnapshot` remembers its refs in a hidden side table, signature unchanged. Verify: `yarn test:unit` (`getDBDiffSince.test.ts`, `getDBSnapshot.test.ts`), and the README emulator example, which now uses it.
-- **01_04** (`a663c08`) — `EnqueueTaskOptions.taskName` is optional and `@deprecated`; the log label is `taskName`, else `data.action`, else `unnamed`. Verify: `yarn test:unit` (`createTaskEnqueuer.test.ts`), and the README tasks example.
-- **01_05** (`14a5104`) — docs only: the admin README states the vitest `root` and `server.deps.inline` settings its mocks need; the client README says the `firebase-kit-client` entry also serves the `firebase/functions` and `firebase/app` mocks. Verify: read both sections.
+- **01_01** (`c3ac45e`) — `getDocumentsFromQuery(query, reader?)` and `getDocuments(refs, reader?)` added to `firebase-kit-admin/firestore`; typed `{ id, ...data }`, `undefined` in the position of a missing document. Verify: `yarn test:emulator`, the README usage snippet.
+- **01_02** (`f06b5d3`) — a masked field whose value changed prints `"/String (before)/"` and `"/String (after)/"`; unchanged masked fields print as before. Verify: `yarn test:unit`, pinned output in `src/testing/internal/getDBChanges.test.ts`.
+- **01_03** (`5b68afe`) — superseded by 03_01 and 03_02: `getDBDiffSince` and the hidden refs map never ship.
+- **01_04** (`a663c08`) — superseded by 02_01 and 04_01.
+- **01_05** (`14a5104`) — docs only: both READMEs explain the vitest `root` and `server.deps.inline` settings. Verify: read both sections.
+- **02_01** (`8b05ef5`) — **breaking**: `EnqueueTaskOptions.taskName` removed. Verify: `yarn build` (a `@ts-expect-error` test rejects `taskName`), `yarn test:unit`.
+- **03_01** (`3bedec8`) — **breaking**: `getDBSnapshot` returns `DBSnapshot` (`{ docs, refs }`) instead of an array; the module-level map is deleted. Verify: `yarn test:unit`, `src/testing/getDBSnapshot.ts`.
+- **03_02** (`b62c015`) — **breaking**: the public diff API is `getDBChangesDiff(before, masks?)` and `expectNoDBChanges(before)`; `getDBChanges` and the changes-object types are internal. Verify: `yarn test:unit`, `yarn test:emulator`, `src/testing/index.ts`.
+- **03_03** (`f87ed8b`) — **breaking output**: masked fields are left out of the `/Timestamp NNNN/` numbering, and a masked Timestamp prints `"/Timestamp/"` (was `"/String/"`). Verify: `yarn test:unit`, `src/testing/internal/getDBChanges.test.ts`.
+- **03_04** (`9a1786b`) — docs only: the admin README documents the two-call API. Verify: read the testing section and its example.
+- **04_01** (`49fdab0`) — **breaking**: task data is typed `TData extends { action: string }`; the log label is `data.action`; `getAction` and the `unnamed` fallback are gone. Verify: `yarn build`, `yarn test:unit`.
 
-Each task's implementer ran `yarn format`, `yarn lint` and `yarn build`. `yarn test:unit` last ran after 01_04, `yarn test:emulator` after 01_03; nothing after those points touched code they cover. README snippets were type-checked in a throwaway project built from `yarn pack`. The review round (two reviewers over the 24 files) returned no blocking finding.
+Every code task ran `yarn lint`, `yarn build` and `yarn test:unit`; `yarn test:emulator` last ran after 03_03, and only docs and `src/tasks` changed after it. README snippets were type-checked in a throwaway project built from `yarn pack`. Both review rounds (the original 24 files, then the 26 files changed by the amendments) returned no blocking finding.
 
 ## Open assumptions
 
-- The public names are the planner's proposals, not the owner's pick: `getDocumentsFromQuery`, `getDocuments`, `getDBDiffSince`.
-- A `taskName` that is passed wins over `data.action`, so existing callers' log lines do not change. The generic label is `unnamed`.
-- "Additive" is slightly too strong for `taskName`: code that reads it from an `EnqueueTaskOptions` value now gets `string | undefined`, and a deprecation error under a strict lint config. Passing it is unaffected.
-- A masked Timestamp that is rewritten shows as changed, like any other masked field. The owner confirmed this, since they rarely mask timestamps.
-- A copy of a snapshot (`slice`, spread, `filter`) has no remembered refs, so `getDBDiffSince` throws on it.
-- The release is one squashed `feat:` commit with no `BREAKING CHANGE:` footer.
-- The follow-up edits in the consuming app are out of scope.
-- The spike is closed with no code; only the two README gaps were fixed.
+- `getDocumentsFromQuery`, `getDocuments` and the `DBSnapshot` type name are the planner's proposals; `getDBChangesDiff` and `expectNoDBChanges` are the owner's.
+- `expectNoDBChanges` takes no masks, and a rewrite with identical data counts as modified (the document's update time changed).
+- The consuming app must migrate before it can take this version: about 2,150 `getDBSnapshot` sites are unaffected, 661 diff sites and 411 `expectNoDBChanges` sites change their arguments, 13 sites read `.docs`, its `omitServerStamps` sites switch to masks, and seven `taskName` lines go. That work is outside this repo.
+- The owner's dependency update (dev dependencies and Yarn 4.18.1) is still uncommitted in the working tree and is not part of any task commit. It passed lint, build, unit and emulator tests before the amendments.
+- The spike is closed with no code.
 
 ## Left unfixed
 
-- Minor, from the review round: `packages/firebase-kit-client/README.md:143` says "its cached reads import `getApp` from `firebase/app`"; every Firestore read does, cached or not.
-- Found by the 01_05 implementer, outside its task: the admin README never says the functions mock needs `resetFunctionsMock` in `beforeEach` before its queue spies do anything.
+- Minor, first review round: `packages/firebase-kit-client/README.md` says "its cached reads import `getApp` from `firebase/app`"; every Firestore read does.
+- Found by the 01_05 implementer: the admin README never says the functions mock needs `resetFunctionsMock` in `beforeEach`.
+- Minor, amendment critic: 03_03's "Timestamp inside a masked map" test only proves the change if the masked timestamp is the earlier one; the implementer reported the two numbering tests failing before the change, but this one was not separately confirmed.
 
 ## Amendments
 
-None.
+All dated 2026-11-13, decided by the owner at review; full text under `## Amendments` in spec.md.
+
+1. `taskName` removed outright; the release becomes breaking (02_01).
+2. `getDBSnapshot` returns an object carrying its refs; no module-level state (03_01).
+3. Two-call diff API, `getDBChanges` internal, masked fields out of the timestamp numbering, masked Timestamp prints `/Timestamp/` (03_02 to 03_04).
+4. Task data must be `{ action: string }` (04_01).
