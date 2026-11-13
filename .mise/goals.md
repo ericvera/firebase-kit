@@ -79,6 +79,64 @@ default diff output in task 4. All three packages version together, so any
 breaking change bumps the major on all of them (CLAUDE.md "Releasing"). None of
 the tasks writes data or adds migrations.
 
+## Task descriptions
+
+Read from the owner's task tracker on 2026-11-12, after the investigation above
+had run on the titles alone. Summarized without the consuming app's name, file
+names or branch names, because this directory is committed.
+
+1. **get-docs-from-query** — the admin package has `checkDocumentExists`
+   (single doc, throws) and `checkDocumentInQueryExists` (first match or
+   undefined) but nothing for reading many docs from a query, so every
+   multi-doc call site in the consuming app repeats
+   `snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))`. Add a typed
+   helper (`getDocsFromQuery` or similar) that returns the mapped entities.
+2. **getDocuments(refs)** — Firestore's instance-level `getAll` lacks the
+   generic overload that `Transaction.getAll` has, so callers hand-write a type
+   assertion. A wrapper that preserves the ref's document type removes the cast
+   at every call site.
+3. **snapshot-diff helper** — tests write
+   `getDBChangesDiff(getDBChanges(before, after))` and then assert on the
+   result. The task asks for a helper that takes the before and after snapshots
+   and returns the diff directly, skipping the intermediate changes object.
+   About 309 tests in the consuming app use the two-step form.
+4. **mask after comparison** — a masked field whose value changed renders as
+   one unchanged context line (`"field": "/String/"`), so the change is
+   invisible; a consumer test needed a hand-written `not.toBe` to cover an
+   overwrite. Proposed: compare the normalized-but-unmasked data, then mask the
+   rendered diff, so a changed masked value shows as `- /String/` / `+ /String/`
+   lines with the content still hidden. Alternative considered: indexed tokens
+   (`/String 000/` vs `/String 001/`, mirroring the existing
+   `/Timestamp NNNN/`); masking after comparison keeps tokens stable across
+   runs.
+5. **task log label** — `taskName` never reaches Cloud Tasks; it is only
+   interpolated into two `logger.info` lines. Every caller in the consuming app
+   already passes `data.action`, and its `taskName` and `action` vocabularies
+   had drifted apart. Derive the label from `data.action`; make `taskName`
+   optional first so consumers keep compiling, then remove it in a later release
+   once they stop passing it.
+6. **spike** — consumers must add the kit packages (`firebase-kit-admin` or
+   `firebase-kit-client`, plus `firebase-kit-protocol` and `getsetdel`) to
+   `server.deps.inline` so their `vi.mock('firebase-functions')` /
+   `vi.mock('firebase/functions')` keep intercepting the imports the kit makes
+   internally. Evaluate whether the kit can accept its firebase collaborators as
+   injected dependencies (`createActionableFunctionCaller` already takes
+   `dependencies.functions`), or ship a documented vitest preset. Compare with
+   `getsetdel`, whose README documents the same inline requirement as the
+   ecosystem-standard answer.
+
+What the descriptions change against the investigation:
+
+- Task 3: the task asks for less than the decision below — it keeps the after
+  snapshot in the test and only folds the two nested calls into one. The owner
+  confirms which shape.
+- Task 5: the task settles that `taskName` becomes optional now and is removed
+  in a later release.
+- Task 6: wider than the investigation, which covered only the client's
+  IndexedDB path. It spans all three packages and the mocking of firebase
+  modules inside the kit. If it stays in this run it needs a fresh
+  investigation.
+
 ## Decisions
 
 - **Task 3 (snapshot-diff helper) — in scope.** The owner's intent is to make
@@ -93,6 +151,13 @@ the tasks writes data or adds migrations.
   `undefined` in its position**, so the result lines up with the refs passed
   in. It is neither skipped nor thrown.
 
+- **Task 5 (task log label) — in scope, `taskName` becomes optional**, as the
+  task description asks. Removing it is a later, breaking release and is out of
+  scope here.
+
+- **Consumer follow-ups are out of scope.** Each task names call sites to update
+  in the consuming app; those live outside this repo.
+
 ## Assumptions
 
 - Task 3: the planner checks whether a snapshot already carries its refs; if it
@@ -100,23 +165,22 @@ the tasks writes data or adds migrations.
   them. The helper's name is also the planner's to propose.
 - Tasks 1 and 2 are in scope and share one design (typed `{ id, ...data }`
   results, optional `TransactionReader`).
+- Task 5: a `taskName` that is passed still labels the log lines, `data.action`
+  labels them when `taskName` is omitted, and a generic label is used when
+  neither exists. Existing callers therefore see no change. `taskName` is marked
+  `@deprecated`.
 
 ## Open questions
 
 Asked, awaiting the owner's pick:
 
-1. Task 4 (mask after comparison): reframe to "a masked field whose value
-   changes shows as changed" — as the new default, behind an opt-in option, or
-   drop?
-2. Task 6 (spike on `server.deps.inline`): its own branch, a written evaluation
+1. Task 3 (snapshot-diff helper): keep the decided shape (the new call also
+   takes the after snapshot), switch to the task's narrower helper (before and
+   after in, diff out), or build both?
+2. Task 4 (mask after comparison): as the new default, behind an opt-in option,
+   or drop?
+3. Task 6 (spike on `server.deps.inline`): its own branch, a written evaluation
    in this run, or evaluate and build the winner in this run?
-3. Task 5: `taskName` stays required with `data.action` preferred when present,
-   or becomes optional, or the task is dropped.
-
-The owner asked for the motivation behind tasks 4 and 6. The tasks arrived as
-titles only and their ids appear nowhere in this repo, so the motivation given
-back was inferred from the code and the client README, not from a task
-description.
 
 Next round:
 
