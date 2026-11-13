@@ -1,3 +1,4 @@
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import type { DBSnapshot } from '../getDBSnapshot.js'
 import { ascCompare } from './ascCompare.js'
 import type { DBSnapshotChanges } from './DocumentChangeSnapshot.js'
@@ -23,8 +24,8 @@ export const getDBChanges = <TCollection extends string = string>(
   after: DBSnapshot,
   masks?: Partial<Record<TCollection, string[]>>,
 ): DBSnapshotChanges => {
-  const beforeDocs = before.docs
-  const afterDocs = after.docs
+  const beforeDocs = before.docs.sort(ascCompare((a) => a.updateTime.valueOf()))
+  const afterDocs = after.docs.sort(ascCompare((a) => a.updateTime.valueOf()))
 
   // Masks are keyed by plain string internally; the type parameter only narrows
   // what a caller may name, so widening back here loses nothing.
@@ -37,118 +38,87 @@ export const getDBChanges = <TCollection extends string = string>(
     unmodified: [],
   }
 
-  // Step 1: Extract all unique timestamps from all documents
-  let timestampValues = new Set<string>()
+  // Step 1: Mask shallow copies, because `data()` may hand back the caller's
+  // own object. Masking first keeps masked timestamps out of the numbering.
+  const withCopy = (doc: QueryDocumentSnapshot) => ({
+    doc,
+    data: { ...doc.data() },
+  })
+  const beforeEntries = beforeDocs.map(withCopy)
+  const afterEntries = afterDocs.map(withCopy)
+  const pairs = afterEntries.map((afterEntry) => ({
+    afterEntry,
+    beforeEntry: beforeEntries.find(
+      ({ doc }) => doc.ref.path === afterEntry.doc.ref.path,
+    ),
+  }))
+  const removedEntries = beforeEntries.filter(({ doc: beforeDoc }) =>
+    afterDocs.every((afterDoc) => afterDoc.ref.path !== beforeDoc.ref.path),
+  )
 
-  // Collect timestamps from beforeDocs
-  beforeDocs.forEach((doc) => {
-    // Merge the extracted timestamps into our set
-    const docTimestamps = extractTimestamps(doc.data())
-    timestampValues = new Set([...timestampValues, ...docTimestamps])
+  pairs.forEach(({ afterEntry, beforeEntry }) => {
+    const collection = afterEntry.doc.ref.parent.id
+
+    if (beforeEntry) {
+      maskModifiedProps(beforeEntry.data, afterEntry.data, collection, maskKeys)
+    } else {
+      maskProps(afterEntry.data, collection, maskKeys)
+    }
   })
 
-  // Collect timestamps from afterDocs
-  afterDocs.forEach((doc) => {
-    // Merge the extracted timestamps into our set
-    const docTimestamps = extractTimestamps(doc.data())
-    timestampValues = new Set([...timestampValues, ...docTimestamps])
+  removedEntries.forEach(({ doc, data }) => {
+    maskProps(data, doc.ref.parent.id, maskKeys)
   })
 
-  // Step 2: Sort timestamps chronologically
+  // Step 2: Index the timestamps left after masking across both snapshots
+  const timestampValues = new Set<string>()
+  for (const { data } of [...beforeEntries, ...afterEntries]) {
+    extractTimestamps(data).forEach((value) => timestampValues.add(value))
+  }
   const sortedTimestamps = Array.from(timestampValues).sort()
 
-  // Step 3: Normalize all documents by replacing timestamps
-  const beforeDocsNormalized = beforeDocs
-    .sort(ascCompare((a) => a.updateTime.valueOf()))
-    .map((doc) => {
-      const normalizedData = normalizeData(doc.data(), sortedTimestamps)
-      return { doc, normalizedData }
-    })
+  const normalize = (data: Record<string, unknown>) =>
+    normalizeData(data, sortedTimestamps)
 
-  const afterDocsNormalized = afterDocs
-    .sort(ascCompare((a) => a.updateTime.valueOf()))
-    .map((doc) => {
-      const normalizedData = normalizeData(doc.data(), sortedTimestamps)
-      return { doc, normalizedData }
-    })
+  // Step 3: Classify each document by presence and updateTime
+  pairs.forEach(({ afterEntry, beforeEntry }) => {
+    const afterDoc = afterEntry.doc
 
-  // Process added and modified docs
-  afterDocsNormalized.forEach(
-    ({ doc: afterDoc, normalizedData: afterNormalizedData }) => {
-      // Get added docs
-      const isAdded = beforeDocs.every(
-        (beforeDoc) => beforeDoc.ref.path !== afterDoc.ref.path,
+    if (!beforeEntry) {
+      result.added.push(
+        new AddedDocumentSnapshot(
+          afterDoc,
+          normalize(afterEntry.data),
+          afterDocs,
+        ),
       )
+      return
+    }
 
-      if (isAdded) {
-        const afterMaskedData = maskProps(
-          afterNormalizedData,
-          afterDoc.ref.parent.id,
-          maskKeys,
-        )
+    const beforeDoc = beforeEntry.doc
 
-        result.added.push(
-          new AddedDocumentSnapshot(afterDoc, afterMaskedData, afterDocs),
-        )
-        return
-      }
-
-      // Get modified and unmodified docs
-      const beforeDocData = beforeDocsNormalized.find(
-        ({ doc }) => doc.ref.path === afterDoc.ref.path,
+    if (!beforeDoc.updateTime.isEqual(afterDoc.updateTime)) {
+      result.modified.push(
+        new ModifiedDocumentSnapshot(
+          beforeDoc,
+          afterDoc,
+          normalize(beforeEntry.data),
+          normalize(afterEntry.data),
+          afterDocs,
+        ),
       )
-
-      if (!beforeDocData) {
-        return
-      }
-
-      const { doc: beforeDoc, normalizedData: beforeNormalizedData } =
-        beforeDocData
-      maskModifiedProps(
-        beforeNormalizedData,
-        afterNormalizedData,
-        afterDoc.ref.parent.id,
-        maskKeys,
+    } else {
+      result.unmodified.push(
+        new UnmodifiedDocumentSnapshot(beforeDoc, afterDocs),
       )
+    }
+  })
 
-      if (!beforeDoc.updateTime.isEqual(afterDoc.updateTime)) {
-        result.modified.push(
-          new ModifiedDocumentSnapshot(
-            beforeDoc,
-            afterDoc,
-            beforeNormalizedData,
-            afterNormalizedData,
-            afterDocs,
-          ),
-        )
-      } else {
-        result.unmodified.push(
-          new UnmodifiedDocumentSnapshot(beforeDoc, afterDocs),
-        )
-      }
-    },
-  )
-
-  // Process removed docs
-  beforeDocsNormalized.forEach(
-    ({ doc: beforeDoc, normalizedData: beforeNormalizedData }) => {
-      const isRemoved = afterDocs.every(
-        (afterDoc) => afterDoc.ref.path !== beforeDoc.ref.path,
-      )
-
-      if (isRemoved) {
-        const beforeMaskedData = maskProps(
-          beforeNormalizedData,
-          beforeDoc.ref.parent.id,
-          maskKeys,
-        )
-
-        result.removed.push(
-          new RemovedDocumentSnapshot(beforeDoc, beforeMaskedData, beforeDocs),
-        )
-      }
-    },
-  )
+  removedEntries.forEach(({ doc, data }) => {
+    result.removed.push(
+      new RemovedDocumentSnapshot(doc, normalize(data), beforeDocs),
+    )
+  })
 
   return result
 }

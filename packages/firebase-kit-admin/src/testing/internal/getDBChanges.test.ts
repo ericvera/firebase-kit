@@ -201,17 +201,151 @@ it('labels a masked timestamp that was rewritten', () => {
     },
   )
 
-  // Verify: there is no timestamp special case — the normalized index differs,
-  // so the masked field reads as changed
+  // Verify: there is no timestamp special case — the instants differ, so the
+  // masked field reads as changed
   expect(changes.modified.map((snapshot) => snapshot.getDiff()))
     .toMatchInlineSnapshot(`
     [
       "  Object {
-    -   "at": "/String (before)/",
-    +   "at": "/String (after)/",
+    -   "at": "/Timestamp (before)/",
+    +   "at": "/Timestamp (after)/",
       }",
     ]
   `)
+})
+
+it('prints the Timestamp token for a masked Timestamp', () => {
+  const unchangedBefore = createEntry(
+    'unchanged',
+    { at: Timestamp.fromMillis(1000), name: 'Draft' },
+    1000,
+  )
+  const unchangedAfter = createEntry(
+    'unchanged',
+    { at: Timestamp.fromMillis(1000), name: 'Final' },
+    2000,
+  )
+  const changedBefore = createEntry(
+    'changed',
+    { at: Timestamp.fromMillis(1000) },
+    1000,
+  )
+  const changedAfter = createEntry(
+    'changed',
+    { at: Timestamp.fromMillis(5000) },
+    2000,
+  )
+  const added = createEntry('added', { at: Timestamp.fromMillis(1000) }, 3000)
+
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([unchangedBefore, changedBefore]),
+    createDBSnapshot([unchangedAfter, changedAfter, added]),
+    {
+      entries: ['at'],
+    },
+  )
+
+  expect(changes.modified.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "  Object {
+        "at": "/Timestamp/",
+    -   "name": "Draft",
+    +   "name": "Final",
+      }",
+      "  Object {
+    -   "at": "/Timestamp (before)/",
+    +   "at": "/Timestamp (after)/",
+      }",
+    ]
+  `)
+  expect(changes.added.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "- Object {}
+    + Object {
+    +   "at": "/Timestamp/",
+    + }",
+    ]
+  `)
+})
+
+it('leaves masked timestamps out of the numbering', () => {
+  const before = createEntry(
+    'entry-1',
+    { at: Timestamp.fromMillis(1000), updated: Timestamp.fromMillis(5000) },
+    1000,
+  )
+  const after = createEntry(
+    'entry-1',
+    { at: Timestamp.fromMillis(9000), updated: Timestamp.fromMillis(6000) },
+    2000,
+  )
+
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+    {
+      entries: ['at'],
+    },
+  )
+
+  // Verify: the masked `at` takes no index, so `updated` numbers from zero
+  expect(changes.modified.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "  Object {
+    -   "at": "/Timestamp (before)/",
+    -   "updated": "/Timestamp 0000/",
+    +   "at": "/Timestamp (after)/",
+    +   "updated": "/Timestamp 0001/",
+      }",
+    ]
+  `)
+})
+
+it('leaves a Timestamp inside a masked map out of the numbering', () => {
+  const entry = createEntry(
+    'entry-1',
+    {
+      meta: { at: Timestamp.fromMillis(1000) },
+      updated: Timestamp.fromMillis(5000),
+    },
+    1000,
+  )
+
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([]),
+    createDBSnapshot([entry]),
+    {
+      entries: ['meta'],
+    },
+  )
+
+  expect(changes.added.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "- Object {}
+    + Object {
+    +   "meta": "/Map/",
+    +   "updated": "/Timestamp 0000/",
+    + }",
+    ]
+  `)
+})
+
+it("does not modify the documents' data", () => {
+  const at = Timestamp.fromMillis(1000)
+  const data = { at, name: 'entry' }
+  const entry = createEntry('entry-1', data, 1000)
+
+  getDBChanges<Collection>(createDBSnapshot([]), createDBSnapshot([entry]), {
+    entries: ['at'],
+  })
+
+  // Verify: masking runs on a copy, because `data()` hands back the caller's
+  // object
+  expect(data.at).toBe(at)
 })
 
 it('masks nothing when no masks are given', () => {

@@ -10,6 +10,9 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  * label tracks only whether it changed, never the value, so output stays stable
  * for randomly generated values. A key on one side only keeps the plain token,
  * since the diff already prints it as `+` or `-`.
+ *
+ * It runs on raw document data before normalization, so its equality check
+ * sees real values and Timestamps compare by instant.
  */
 export const maskModifiedProps = (
   before: unknown,

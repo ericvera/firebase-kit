@@ -1,4 +1,17 @@
+import { Buffer } from 'node:buffer'
+import { Timestamp } from 'firebase-admin/firestore'
+
 const getTypeName = (value: unknown): string => {
+  if (value instanceof Timestamp) {
+    return 'Timestamp'
+  }
+
+  // Masking used to run after normalization had turned a Buffer into a string,
+  // and consumer snapshots hold that token.
+  if (Buffer.isBuffer(value)) {
+    return 'String'
+  }
+
   if (value === null) {
     return 'Null'
   }

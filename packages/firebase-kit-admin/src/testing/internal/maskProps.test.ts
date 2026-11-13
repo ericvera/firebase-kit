@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+import { Timestamp } from 'firebase-admin/firestore'
 import { expect, it } from 'vitest'
 import { getTypeToken, maskProps } from './maskProps.js'
 
@@ -85,7 +87,19 @@ it('masks in place, returning the object it was handed', () => {
   const result = maskProps(data, 'entries', { entries: ['token'] })
 
   // Verify: this mutates its input — safe in production because it only ever
-  // sees freshly normalized data, but a shared fixture would leak between cases
+  // sees a fresh copy of the document data, but a shared fixture would leak
+  // between cases
   expect(result).toBe(data)
   expect(data).toEqual({ token: '/String/' })
+})
+
+it('names a raw Timestamp by its class', () => {
+  expect(getTypeToken(Timestamp.fromMillis(0))).toBe('/Timestamp/')
+  expect(getTypeToken(Timestamp.fromMillis(0), 'after')).toBe(
+    '/Timestamp (after)/',
+  )
+})
+
+it('renders a raw Buffer as the string token', () => {
+  expect(getTypeToken(Buffer.from('x'))).toBe('/String/')
 })

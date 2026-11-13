@@ -1,4 +1,5 @@
 import type { Query, QueryDocumentSnapshot } from 'firebase-admin/firestore'
+import { Timestamp } from 'firebase-admin/firestore'
 import { expect, it, vi } from 'vitest'
 import { createDBSnapshot } from '../__test__/utils/createDBSnapshot.js'
 import { createDocSnapshot } from '../__test__/utils/createDocSnapshot.js'
@@ -124,4 +125,56 @@ it('re-reads every input, refs object and bare query', async () => {
   expect(bareGet).toHaveBeenCalledTimes(2)
   expect(diff).toContain('ADDED (path: spaces/[ID])')
   expect(diff).toContain('ADDED (path: entries/[ID])')
+})
+
+it('keeps unmasked timestamp numbers stable when a timestamp is masked', async () => {
+  const timestampedDocs = (
+    atMs: number,
+    updatedMs: number,
+    updateTimeMs: number,
+  ) => [
+    createDocSnapshot({
+      path: 'spaces/space-1',
+      data: {
+        at: Timestamp.fromMillis(atMs),
+        updated: Timestamp.fromMillis(updatedMs),
+      },
+      updateTimeMs,
+    }),
+  ]
+  const diffWith = async (masks?: { spaces: string[] }) => {
+    const { state, query } = createMutableQuery(timestampedDocs(1000, 5000, 1))
+    const before = await getDBSnapshot(query)
+    state.docs = timestampedDocs(9000, 6000, 2)
+
+    return getDBChangesDiff(before, masks)
+  }
+
+  // Verify: without the mask `at` takes index 0000, with it `updated` does
+  expect(await diffWith()).toMatchInlineSnapshot(`
+    "DB DIFF
+
+    --------------------------------
+     MODIFIED (path: spaces/[ID])
+    --------------------------------
+      Object {
+    -   "at": "/Timestamp 0000/",
+    -   "updated": "/Timestamp 0001/",
+    +   "at": "/Timestamp 0003/",
+    +   "updated": "/Timestamp 0002/",
+      }"
+  `)
+  expect(await diffWith({ spaces: ['at'] })).toMatchInlineSnapshot(`
+    "DB DIFF
+
+    --------------------------------
+     MODIFIED (path: spaces/[ID])
+    --------------------------------
+      Object {
+    -   "at": "/Timestamp (before)/",
+    -   "updated": "/Timestamp 0000/",
+    +   "at": "/Timestamp (after)/",
+    +   "updated": "/Timestamp 0001/",
+      }"
+  `)
 })

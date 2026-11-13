@@ -1,3 +1,4 @@
+import { Timestamp } from 'firebase-admin/firestore'
 import { expect, it } from 'vitest'
 import { maskModifiedProps } from './maskModifiedProps.js'
 
@@ -80,4 +81,20 @@ it('falls back to plain masking when a side is not an object', () => {
   // Verify: with no object to compare against, the object side gets the plain
   // token
   expect(after).toEqual({ secret: '/String/' })
+})
+
+it('compares raw Timestamps by instant', () => {
+  const equalBefore = { secret: Timestamp.fromMillis(1000) }
+  const equalAfter = { secret: Timestamp.fromMillis(1000) }
+  const changedBefore = { secret: Timestamp.fromMillis(1000) }
+  const changedAfter = { secret: Timestamp.fromMillis(2000) }
+
+  maskModifiedProps(equalBefore, equalAfter, 'entries', maskKeys)
+  maskModifiedProps(changedBefore, changedAfter, 'entries', maskKeys)
+
+  // Verify: distinct instances of the same instant count as unchanged
+  expect(equalBefore).toEqual({ secret: '/Timestamp/' })
+  expect(equalAfter).toEqual({ secret: '/Timestamp/' })
+  expect(changedBefore).toEqual({ secret: '/Timestamp (before)/' })
+  expect(changedAfter).toEqual({ secret: '/Timestamp (after)/' })
 })
