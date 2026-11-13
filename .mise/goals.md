@@ -160,9 +160,31 @@ What the descriptions change against the investigation:
 - **Consumer follow-ups are out of scope.** Each task names call sites to update
   in the consuming app; those live outside this repo.
 
+- **Task 3 — the snapshot remembers its refs.** `getDBSnapshot` records, in a
+  hidden side table keyed by the array it returns, the refs that array was taken
+  from; the new call reads them to take the after snapshot, so its arguments are
+  the before snapshot and the optional masks. A snapshot it has no record of (a
+  copy made with `slice`, spread or `filter`) makes the new call throw a clear
+  error. No existing signature or exported type changes.
+
+- **Task 6 (spike) — closed as "leave it as documented"; nothing is built.** The
+  run fixes the two README gaps the investigation found instead: the admin
+  README states the `server.deps.inline` requirement its mocks depend on, and the
+  client README gives the full set of reasons for the line (its
+  `firebase/functions` and `firebase/app` mocks, not only the IndexedDB fake).
+  `firebase-kit-protocol` needs no inlining and is not listed.
+
 ## Assumptions
 
 - Task 3: the helper's name is the planner's to propose.
+- Task 4, if kept — the driver's reasoning, for the planner to confirm against
+  the code: the change need not post-process rendered values. A mask token is
+  always a one-line string, and the masking step for a modified document has
+  both raw values at hand, so a masked field whose raw values differ can be
+  given placeholders that the comparison sees as different and that print
+  identically. jest-diff's `diffLinesUnified2`, which compares one pair of line
+  arrays and displays another, is a second candidate. Neither changes a public
+  signature.
 - Tasks 1 and 2 are in scope and share one design (typed `{ id, ...data }`
   results, optional `TransactionReader`).
 - Task 5: a `taskName` that is passed still labels the log lines, `data.action`
@@ -332,10 +354,7 @@ for its token.
 
 Asked, awaiting the owner's pick:
 
-1. Task 3: how the new call knows which refs to re-read — the snapshot remembers
-   them through a hidden side table, or the test passes `refs` again.
-2. Task 4 (mask after comparison): as the new default released as a regular
-   feature, behind an opt-in option, or drop.
-3. Task 6: close the spike as "leave it as documented" and fix the two README
-   gaps in this run, close it with no change, build the vitest preset, or inject
-   everything.
+1. Task 4 (mask after comparison): as the new default released as a regular
+   feature, behind an opt-in option, or drop. The owner asked whether it is
+   possible without a large rewrite, how it would work, and why it was filed;
+   answered from the task description and the two investigations.
