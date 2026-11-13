@@ -39,7 +39,9 @@ it('allows reading and writing within transaction', async () => {
   })
 
   // Ensure that the name was updated
-  expect(await getDBChangesDiff(beforeSnapshot)).toMatchInlineSnapshot(`
+  const diff = await getDBChangesDiff(beforeSnapshot)
+
+  expect(diff).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------

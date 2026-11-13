@@ -61,7 +61,9 @@ it('reads every query it is given', async () => {
 })
 
 it('returns an empty snapshot for an empty input array', async () => {
-  expect(await getDBSnapshot([])).toEqual({ docs: [], refs: [] })
+  const snapshot = await getDBSnapshot([])
+
+  expect(snapshot).toEqual({ docs: [], refs: [] })
 })
 
 it('carries its inputs as refs', async () => {

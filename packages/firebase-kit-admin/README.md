@@ -586,9 +586,9 @@ it('renames the space', async () => {
 
   await renameSpace(undefined, 'space-1', 'Renamed')
 
-  expect(
-    await getDBChangesDiff(before, { spaces: ['updated'] }),
-  ).toMatchInlineSnapshot()
+  const diff = await getDBChangesDiff(before, { spaces: ['updated'] })
+
+  expect(diff).toMatchInlineSnapshot()
 })
 
 it('leaves the database untouched for a missing space', async () => {

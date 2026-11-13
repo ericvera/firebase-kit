@@ -31,7 +31,9 @@ it('allows writing within batch', async () => {
     })
   })
 
-  expect(await getDBChangesDiff(beforeSnapshot)).toMatchInlineSnapshot(`
+  const diff = await getDBChangesDiff(beforeSnapshot)
+
+  expect(diff).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------
@@ -68,7 +70,9 @@ it('commits all batch operations atomically', async () => {
     })
   })
 
-  expect(await getDBChangesDiff(beforeSnapshot)).toMatchInlineSnapshot(`
+  const diff = await getDBChangesDiff(beforeSnapshot)
+
+  expect(diff).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------

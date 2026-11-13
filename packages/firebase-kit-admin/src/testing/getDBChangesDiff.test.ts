@@ -66,7 +66,8 @@ it('passes masks through to getDBChanges', async () => {
   state.docs = afterDocs()
 
   const masks = { spaces: ['updated'] }
-  const diff = await getDBChangesDiff(before, masks)
+  const masked = await getDBChangesDiff(before, masks)
+  const unmasked = await getDBChangesDiff(before)
 
   const expected = formatDBChanges(
     getDBChanges(
@@ -76,8 +77,8 @@ it('passes masks through to getDBChanges', async () => {
     ),
   )
 
-  expect(diff).toBe(expected)
-  expect(diff).not.toBe(await getDBChangesDiff(before))
+  expect(masked).toBe(expected)
+  expect(masked).not.toBe(unmasked)
 })
 
 it('gives the same diff when called twice on one before snapshot', async () => {
@@ -86,10 +87,11 @@ it('gives the same diff when called twice on one before snapshot', async () => {
   state.docs = afterDocs()
 
   const first = await getDBChangesDiff(before)
+  const second = await getDBChangesDiff(before)
 
   // Verify: the first call's in-place sort of before.docs leaves the second
   // call's diff unchanged
-  expect(await getDBChangesDiff(before)).toBe(first)
+  expect(second).toBe(first)
 })
 
 it('accepts a hand-built snapshot', async () => {
@@ -98,12 +100,11 @@ it('accepts a hand-built snapshot', async () => {
   state.docs = afterDocs()
 
   const expected = await getDBChangesDiff(taken)
+  const diff = await getDBChangesDiff(createDBSnapshot(beforeDocs(), [query]))
 
   // Verify: nothing ties refs to getDBSnapshot, so any { docs, refs } value
   // re-reads its refs the same way
-  expect(await getDBChangesDiff(createDBSnapshot(beforeDocs(), [query]))).toBe(
-    expected,
-  )
+  expect(diff).toBe(expected)
 })
 
 it('re-reads every input, refs object and bare query', async () => {
@@ -150,8 +151,11 @@ it('keeps unmasked timestamp numbers stable when a timestamp is masked', async (
     return getDBChangesDiff(before, masks)
   }
 
+  const unmasked = await diffWith()
+  const masked = await diffWith({ spaces: ['at'] })
+
   // Verify: without the mask `at` takes index 0000, with it `updated` does
-  expect(await diffWith()).toMatchInlineSnapshot(`
+  expect(unmasked).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------
@@ -164,7 +168,7 @@ it('keeps unmasked timestamp numbers stable when a timestamp is masked', async (
     +   "updated": "/Timestamp 0002/",
       }"
   `)
-  expect(await diffWith({ spaces: ['at'] })).toMatchInlineSnapshot(`
+  expect(masked).toMatchInlineSnapshot(`
     "DB DIFF
 
     --------------------------------
