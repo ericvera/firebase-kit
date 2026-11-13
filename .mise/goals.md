@@ -170,10 +170,9 @@ What the descriptions change against the investigation:
   neither exists. Existing callers therefore see no change. `taskName` is marked
   `@deprecated`.
 
-## Open questions
+## Investigation round 2
 
-The owner asked for three things to be investigated before picking. A second
-investigation answers them; its report goes under `## Investigation round 2`.
+The owner asked for three things to be investigated before picking:
 
 1. **Task 3 — does a snapshot carry its refs?** Does the value `getDBSnapshot`
    returns include the refs (or queries) it was taken from? If not, can it start
@@ -202,14 +201,141 @@ investigation answers them; its report goes under `## Investigation round 2`.
    avoidable at all. End with a plain recommendation on whether it is worth
    doing.
 
-Still the owner's pick, after that report:
+Report. All paths are under
+`/Users/eric/Code/firebase-kit/packages/firebase-kit-admin/src` unless they name
+another package. Nothing was changed. The diff texts came from running the built
+`dist/testing` code on fixtures in the style of the unit tests; the "proposed"
+texts are simulated by diffing unmasked data and then swapping the masked value
+for its token.
 
-- Task 4 (mask after comparison): as the new default, behind an opt-in option,
-  or drop?
-- Task 6 (spike on `server.deps.inline`): build something in this run, do it
-  later on its own branch, or leave it as documented?
+**Task 3 — snapshot refs**
 
-Next round:
+- A snapshot does not carry its refs. `getDBSnapshot` resolves its inputs to
+  queries and returns a bare `Promise<QueryDocumentSnapshot[]>`
+  (`testing/getDBSnapshot.ts:23-35`). Its exported types are only
+  `TestableDBRef` and `SnapshotInput` (:8-13); no snapshot type is exported.
+- What reads a snapshot today: `getDBChanges` sorts both arrays in place, so
+  array identity survives (`getDBChanges.ts:59-71`, pinned by
+  `getDBChanges.test.ts:143`). Change objects keep `afterDocs`/`beforeDocs` to
+  compute paths (`DocumentChangeSnapshot.ts:105-108`).
+  `getDBSnapshot.test.ts:64` asserts `toEqual([])`. The repo's only callers are
+  `createRunBatch.emulator.test.ts:27,38,63,79`,
+  `createRunTransaction.emulator.test.ts:27,42` and `README.md:541-548`.
+- An enumerable property on the array would break `toEqual` and
+  `toStrictEqual`. A non-enumerable property, or a module-level `WeakMap` keyed
+  by the returned array, stays invisible to iteration, spread, JSON and
+  equality. Both are lost on any copy (`slice`, spread, `filter`).
+- Least intrusive: a `WeakMap` side table written by `getDBSnapshot` and read by
+  the new call, which throws if the array is not registered. No signature or
+  type changes; the three existing functions stay untouched. The fallback with
+  no hidden state is for the new call to take the refs again:
+  `(refs, before, masks?)`.
 
-- Task 4, if kept as the new default: whether the release treats the changed
-  diff output as breaking.
+**Task 4 — worked example** (masked `secret`, header
+`MODIFIED (path: entries/[ID])`)
+
+- Today, `secret` overwritten and `name` changed — the secret shows as an
+  unchanged context line:
+
+  ```
+    Object {
+  -   "name": "Draft",
+  +   "name": "Final",
+      "secret": "/String/",
+    }
+  ```
+
+- Proposed, same document (jest-diff groups the `-` lines ahead of the `+`
+  lines):
+
+  ```
+    Object {
+  -   "name": "Draft",
+  -   "secret": "/String/",
+  +   "name": "Final",
+  +   "secret": "/String/",
+    }
+  ```
+
+- Today, only the masked field changes — the header is followed by an empty
+  body. The masked data are equal, so `getDiff` returns undefined
+  (`DocumentChangeSnapshot.ts:28-30`) and renders as `''`
+  (`getDBChangesDiff.ts:41`). The document is still listed because `updateTime`
+  changed (`getDBChanges.ts:111`).
+- Proposed, only the masked field changes (context lines appear because
+  jest-diff's default `expand: true` overrides `contextLines: 0`,
+  `DocumentChangeSnapshot.ts:17-26`):
+
+  ```
+    Object {
+      "name": "Draft",
+  -   "secret": "/String/",
+  +   "secret": "/String/",
+    }
+  ```
+
+- Timestamps: each Timestamp becomes `/Timestamp NNNN/`, indexed by its sorted
+  position across both snapshots (`getDBChanges.ts:38-71`,
+  `internal/normalizeData.ts:29-39`), so changes already show
+  (`getDBChanges.test.ts:119-141`). Masking applies only to top-level fields
+  (`internal/maskProps.ts:22`). A masked Map or Array value renders over several
+  lines, so masking the rendered text is harder for those than for a string.
+
+**Task 6 — the `server.deps.inline` requirement**
+
+- Why it exists: vitest leaves ESM packages in `node_modules` to plain Node by
+  default, and all three packages are `"type": "module"`. A consumer's
+  `vi.mock` then never reaches imports made inside the kit. The only documented
+  fix is `firebase-kit-client/README.md:111-137`,
+  `server.deps.inline: ['getsetdel', 'firebase-kit-client']`; without it, cached
+  reads fail with `ReferenceError: indexedDB is not defined`. The repo's own
+  client config inlines only `getsetdel`, because it imports the kit from
+  source (`firebase-kit-client/vitest.config.ts:27`).
+- Admin imports a mock has to reach, none injected: `firebase-admin/functions`
+  `getFunctions` in `tasks/createTaskEnqueuer.ts:1,34`; the `firebase-functions`
+  `logger` at `createTaskEnqueuer.ts:2`, `errors/FunctionsError.ts:1` and
+  `errors/logInvalidRequest.ts:1`; `firebase-admin/app`
+  `getApp`/`getApps`/`initializeApp` at `createInit.ts:2` and
+  `firestore/internal/createGetFirestore.ts:1-3`; `getAuth` at
+  `auth/checkClaimsVersion.ts:1`.
+- Client: callers inject `functions`, `firebaseApp`, `auth` and `appCheck`
+  (`firebase-kit-client/src/callable/types.ts:44-112`) but still always import
+  `httpsCallable` dynamically, even when `functions` is passed
+  (`createActionableFunctionCaller.ts:49,56`), plus `getToken`
+  (`internal/getTokenHeaders.ts:40`). The Firestore layer imports `getApp`,
+  `getFirestore`, `getDoc`/`getDocs` and `onSnapshot`
+  (`firestore/internal/getHostingFirestore.ts:17-30`, `subscribe.ts:20`) and
+  `getsetdel` statically; `FirestoreUtilsDependencies` injects none of them
+  (`firebase-kit-client/src/firestore/types.ts:266-290`).
+- Protocol: `firebase-kit-protocol` has no runtime imports or dependencies, so
+  inlining it does nothing. That contradicts the task description.
+- Documentation gaps: the admin README never mentions `inline`, yet its mocks
+  only reach the kit's own imports if `firebase-kit-admin` is inlined (for
+  example the dedup path in `./tasks`, `README.md:558-620`). The client README
+  gives `getsetdel` as the only reason, but the `firebase/functions` and
+  `firebase/app` mocks at `README.md:620-695` depend on the same inline.
+- Options compared:
+  - Inject everything. Every listed API takes new required collaborators. A
+    `BREAKING CHANGE:`, a major on all three packages, and the shipped `./mocks`
+    factories become largely redundant. The only route that removes the
+    requirement.
+  - A vitest preset under a new `exports` subpath. Additive (a minor release),
+    still inlines, and saves the consumer one line.
+  - Leave it as documented. Costs nothing and matches the README answer
+    `getsetdel` gives.
+- Recommendation: not worth building. Close the spike as "leave it as
+  documented", and spend a small docs change on the gaps above: add the inline
+  requirement to the admin README and give the full set of reasons in the
+  client README.
+
+## Open questions
+
+Asked, awaiting the owner's pick:
+
+1. Task 3: how the new call knows which refs to re-read — the snapshot remembers
+   them through a hidden side table, or the test passes `refs` again.
+2. Task 4 (mask after comparison): as the new default released as a regular
+   feature, behind an opt-in option, or drop.
+3. Task 6: close the spike as "leave it as documented" and fix the two README
+   gaps in this run, close it with no change, build the vitest preset, or inject
+   everything.
