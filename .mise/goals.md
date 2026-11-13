@@ -79,30 +79,38 @@ default diff output in task 4. All three packages version together, so any
 breaking change bumps the major on all of them (CLAUDE.md "Releasing"). None of
 the tasks writes data or adds migrations.
 
+## Decisions
+
+- **Task 3 (snapshot-diff helper) — in scope.** The owner's intent is to make
+  the repetitive pattern in each emulator test shorter and more readable. Keep
+  `getDBSnapshot` for the before snapshot and add one call that replaces the
+  after/changes/diff lines; the code under test stays a plain statement between
+  the two (not a callback). The three existing functions stay exported. The
+  README example at `firebase-kit-admin/README.md:527-550` moves to the new
+  call.
+
+## Assumptions
+
+- Task 3: the planner checks whether a snapshot already carries its refs; if it
+  does not, the new call takes `refs` again or the snapshot starts carrying
+  them. The helper's name is also the planner's to propose.
+- Tasks 1 and 2 are in scope and share one design (typed `{ id, ...data }`
+  results, optional `TransactionReader`).
+
 ## Open questions
 
-Round 1 — which of the contested tasks stay in the run (tasks 1, 2 and 5 hold
-up; their design questions follow in round 2):
+Asked, awaiting the owner's pick:
 
-1. Task 3 (snapshot-diff helper): drop it, or build only the before/run/after
-   wrapper? Owner's note: the task was about making the repetitive 4-line
-   pattern in each emulator test shorter and more readable — which is the
-   wrapper. Two shapes are on the table: (i) keep `getDBSnapshot` for the
-   before snapshot and add one call that replaces the after/changes/diff lines,
-   suggested by the owner; (ii) one call that takes the code under test as a
-   callback. Driver recommends (i): the code under test stays a plain statement,
-   so its return value and thrown errors need no special handling. Whether a
-   snapshot already carries its refs (so the new call need not take them again)
-   is for the planner to check. Awaiting a confirmed pick.
-2. Task 4 (mask after comparison): reframe to "a masked field whose value
+1. Task 4 (mask after comparison): reframe to "a masked field whose value
    changes shows as changed" — as the new default, behind an opt-in option, or
    drop?
-3. Task 6 (spike on `server.deps.inline`): its own branch, a written evaluation
+2. Task 6 (spike on `server.deps.inline`): its own branch, a written evaluation
    in this run, or evaluate and build the winner in this run?
+3. Task 2: what a missing ref returns (`undefined` in its slot, skipped, or
+   throw).
 
-Round 2 (pending round 1):
+Next round:
 
-- Task 2: what a missing ref returns (skip, `undefined`, or throw).
 - Task 5: `taskName` stays required with `data.action` preferred when present,
   or becomes optional.
 - Task 4, if kept as the new default: whether the release treats the changed
