@@ -414,3 +414,7 @@ Round 3 raised no blocking finding. Two minor findings stand as notes:
   pass the option. Code that reads `taskName` from an `EnqueueTaskOptions` value
   now gets `string | undefined` and, under a strict lint config, a deprecation
   error. (Superseded on 2026-11-13: `taskName` is removed and the release is breaking.)
+
+## Superseded at review (2026-11-13)
+
+The owner changed several decisions above during review. The current record is `## Amendments` in spec.md: `taskName` is removed and task data must carry a string `action`; `getDBSnapshot` returns an object carrying its refs; the public diff API is `getDBChangesDiff(before, masks?)` and `expectNoDBChanges(before)`, with `getDBChanges` internal and `getDBDiffSince` never shipped; masked fields leave the timestamp numbering and a masked Timestamp prints `/Timestamp/`; the release is breaking. "The three existing functions stay exported" under Task 3 no longer holds.

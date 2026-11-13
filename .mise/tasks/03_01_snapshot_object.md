@@ -12,6 +12,13 @@ Delete the module-level `WeakMap` side table
 getDBSnapshot returned" error. The owner objected at review to module-level
 state in the package. This is a breaking public API change.
 
+This is the first of four tasks for two amendments. Task 03_02 then makes
+`getDBChanges` internal, renames `getDBDiffSince` to `getDBChangesDiff` and
+adds `expectNoDBChanges`; 03_03 takes masked fields out of the timestamp
+numbering; 03_04 rewrites the admin README for all of it. This task does not
+touch the README, `src/testing/index.ts` or any file 03_02 moves beyond what
+is listed below.
+
 ## Files to modify/create
 
 All under `/Users/eric/Code/firebase-kit/packages/firebase-kit-admin/`:
@@ -20,7 +27,6 @@ All under `/Users/eric/Code/firebase-kit/packages/firebase-kit-admin/`:
 - `src/testing/getDBChanges.ts` (modify)
 - `src/testing/getDBDiffSince.ts` (modify)
 - `src/testing/internal/snapshotInputs.ts` (delete)
-- `README.md` (modify)
 
 Tests and fixtures (they do not count toward the limit):
 `src/__test__/utils/createDBSnapshot.ts` (create),
@@ -58,14 +64,9 @@ What exists today (task 01_03, already committed):
 - Repo callers: `src/firestore/internal/createRunBatch.emulator.test.ts:27,38,63,79`
   and `createRunTransaction.emulator.test.ts:27,42` take snapshots with
   `getDBSnapshot` and pass them only to `getDBChanges`. They need no change.
-- Admin `README.md`: the testing prose at about :554-566 says "so `before` must
-  be the array `getDBSnapshot` returned, not a copy"; the example code at
-  about :567-585 only passes the snapshot to `getDBDiffSince`; the API reference
-  at about :794-806 has the `getDBSnapshot(inputs)` and `getDBDiffSince` bullets
-  and the exported-types list (`TestableDBRef`, `SnapshotInput`, ...).
 
-Design decisions that reach this task (spec.md "`getDBDiffSince`" and the
-2026-11-13 amendment):
+Design decisions that reach this task (spec.md "Two-call diff API" and the
+2026-11-13 amendments):
 
 - The snapshot type is named `DBSnapshot`, declared and exported in
   `getDBSnapshot.ts`:
@@ -86,7 +87,12 @@ Design decisions that reach this task (spec.md "`getDBDiffSince`" and the
   no error path of its own. Any `{ docs, refs }` value works, including a
   hand-built one.
 - There is no module-level state anywhere in the testing module.
-- No other signature changes. `getDBChangesDiff` is untouched.
+- No other signature changes. `getDBChangesDiff` is untouched here (03_02
+  moves it to `internal/formatDBChanges.ts` and gives the public name to the
+  renamed `getDBDiffSince`).
+- The admin README is left as it is in this task. It goes stale for one task
+  (it still says `before` must be the array `getDBSnapshot` returned) and is
+  rewritten as a whole by 03_04, once the API has its final shape.
 
 Patterns: test fixtures live in `src/__test__/utils/` (for example
 `createDocSnapshot.ts`, a named arrow-function export with a JSDoc).
@@ -121,25 +127,11 @@ None. The mise config lists no Skills & guides entries.
    - JSDoc: drop the "must be the array / a copy makes this throw" sentence and
      say it re-reads the refs `before` carries.
 4. Delete `src/testing/internal/snapshotInputs.ts` (`git rm`).
-5. `README.md` (admin)
-   - Testing prose (about :554-566): replace "it re-reads the same refs for the
-     after snapshot, so `before` must be the array `getDBSnapshot` returned, not
-     a copy" with wording saying `getDBSnapshot` returns a `DBSnapshot`, an object
-     holding the documents (`docs`) and the refs they were read from (`refs`),
-     and `getDBDiffSince` re-reads those refs for the after snapshot. Keep the
-     masks sentences and the sentence about `getDBChanges` /
-     `getDBChangesDiff`. The example code block stays as it is.
-   - API reference (about :794-806): the snapshot bullet says
-     `getDBSnapshot(inputs)` returns a `DBSnapshot` (`{ docs, refs }`) and
-     `getDBChanges(before, after, masks?)` takes two of them. The
-     `getDBDiffSince` bullet says it re-reads the `refs` of a `DBSnapshot`. Add
-     **`DBSnapshot`** to the exported-types list, next to `SnapshotInput`.
-   - Do not restate any dependency version range (CLAUDE.md).
-6. Fixture `src/__test__/utils/createDBSnapshot.ts`:
+5. Fixture `src/__test__/utils/createDBSnapshot.ts`:
    `export const createDBSnapshot = (docs: QueryDocumentSnapshot[], refs: SnapshotInput[] = []): DBSnapshot => ({ docs, refs })`
    with a one-line JSDoc. It wraps hand-built docs for unit tests that call
    `getDBChanges` directly.
-7. Tests:
+6. Tests:
    - `getDBChanges.test.ts` and `getDBChangesDiff.test.ts`: wrap every array
      argument to `getDBChanges` in `createDBSnapshot(...)`, for example
      `getDBChanges(createDBSnapshot([before]), createDBSnapshot([after]))`. The
@@ -167,7 +159,8 @@ None. The mise config lists no Skills & guides entries.
   squashed commit must carry one `BREAKING CHANGE:` footer naming both
   changes. Put this task's part in its own commit message so the ship step finds
   it, e.g.
-  `BREAKING CHANGE: getDBSnapshot (firebase-kit-admin/testing) returns a DBSnapshot { docs, refs } instead of an array, and getDBChanges / getDBDiffSince accept only that object. A test that iterates a snapshot, reads .length or compares it to an array must read .docs.`
+  `BREAKING CHANGE: getDBSnapshot (firebase-kit-admin/testing) returns a DBSnapshot { docs, refs } instead of an array. A test that iterates a snapshot, reads .length or compares it to an array must read .docs.`
+  (03_02 makes `getDBChanges` internal, so the footer does not name it.)
   Per repo CLAUDE.md, `!` after the type is not enough on its own.
 - The working tree holds the owner's uncommitted dependency update
   (`package.json` files, `yarn.lock`, `.yarnrc.yml`, `.yarn/releases/`). Do not
@@ -184,6 +177,8 @@ None. The mise config lists no Skills & guides entries.
 - Test file convention (CLAUDE.md): `vi.mock` calls directly below the imports,
   `vi.hoisted` state above them, every other declaration below.
 - Comments stay within the repo's 80-character limit.
+- Review checklist (`.claude/mise-checklist.md`) rule 7: no colons,
+  semicolons or em-dashes inside comment or JSDoc prose.
 
 ## Verification
 
@@ -197,11 +192,6 @@ None. The mise config lists no Skills & guides entries.
   `getDBSnapshot` → `getDBChanges` against the real emulator.
 - `grep -rn "snapshotInputs\|needs the array getDBSnapshot" /Users/eric/Code/firebase-kit/packages --exclude-dir=node_modules --exclude-dir=dist`
   returns nothing.
-- README (config test exception): `yarn pack` the admin package into a throwaway
-  consumer project outside the repo and type-check the
-  `src/spaces/renameSpace.emulator.test.ts` example verbatim, extracted to its
-  header path with the `db.ts`, `spaceRefs.ts` and `renameSpace.ts` blocks it
-  imports. In that consumer, also type-check
-  `import type { DBSnapshot } from 'firebase-kit-admin/testing'`.
+- No README check here. 03_04 verifies the README with `yarn pack`.
 - `git status` shows the owner's dependency files still modified and
   uncommitted.
