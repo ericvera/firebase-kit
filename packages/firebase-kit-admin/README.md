@@ -551,22 +551,30 @@ export const { createCallableRequest, createHandlerRequestData } =
   })
 ```
 
-An emulator-backed test then snapshots the database with `getDBSnapshot`, runs
-the code under test, and pins the printable diff `getDBDiffSince` returns; it
-re-reads the same refs for the after snapshot, so `before` must be the array
-`getDBSnapshot` returned, not a copy. `getDBDiffSince` takes per-collection
-masks for fields whose values are not stable enough to assert on, keyed by the
-app's own collection names. A masked field whose value changed still shows, as
-a `-` / `+` pair whose tokens read `(before)` and `(after)` (for example
-`"/String (before)/"` and `"/String (after)/"`), while an unchanged masked
-field keeps the plain token. `getDBChanges(before, after, masks?)` and
-`getDBChangesDiff(changes)` remain for a test that needs the changes object
-itself. This example needs a running Firestore emulator and the setup file
-above.
+An emulator-backed test takes a `DBSnapshot` with `getDBSnapshot` before it
+runs the code under test. The snapshot holds the documents read (`docs`) and
+the refs they came from (`refs`). Afterwards `getDBChangesDiff(before, masks?)`
+re-reads those refs and returns the printable diff to pin with an inline
+snapshot. `expectNoDBChanges(before)` re-reads them too and fails, printing the
+diff, if any document was added, removed or modified. A rewrite with identical
+data counts as a modification, because the document's update time moved.
+
+Masks are per-collection field lists, keyed by the app's own collection names,
+for values not stable enough to assert on. A masked field whose value changed
+still shows, as a `-` / `+` pair whose tokens read `(before)` and `(after)`
+(for example `"/String (before)/"` and `"/String (after)/"`), while an
+unchanged masked field keeps the plain token. A masked Timestamp prints
+`"/Timestamp/"`. Masked fields are left out of the `/Timestamp NNNN/`
+numbering, so masking one timestamp does not shift the numbers of the others.
+This example needs a running Firestore emulator and the setup file above.
 
 ```typescript
 // src/spaces/renameSpace.emulator.test.ts
-import { getDBDiffSince, getDBSnapshot } from 'firebase-kit-admin/testing'
+import {
+  expectNoDBChanges,
+  getDBChangesDiff,
+  getDBSnapshot,
+} from 'firebase-kit-admin/testing'
 import { expect, it } from 'vitest'
 import { renameSpace } from './renameSpace.js'
 import { spaceRefs } from './spaceRefs.js'
@@ -579,8 +587,16 @@ it('renames the space', async () => {
   await renameSpace(undefined, 'space-1', 'Renamed')
 
   expect(
-    await getDBDiffSince(before, { spaces: ['updated'] }),
+    await getDBChangesDiff(before, { spaces: ['updated'] }),
   ).toMatchInlineSnapshot()
+})
+
+it('leaves the database untouched for a missing space', async () => {
+  const before = await getDBSnapshot(refs)
+
+  await expect(renameSpace(undefined, 'missing', 'Renamed')).rejects.toThrow()
+
+  await expectNoDBChanges(before)
 })
 ```
 
@@ -791,19 +807,19 @@ from `process.env`) follow the same shape.
   `{ createCallableRequest, createHandlerRequestData }`.
 - **`createTaskRequest(data)`**: The request a task handler test feeds in
   directly.
-- **`getDBSnapshot(inputs)`**, **`getDBChanges(before, after, masks?)`**,
-  **`getDBChangesDiff(changes)`**: The before/after snapshot and printable diff.
-- **`getDBDiffSince(before, masks?)`**: Re-reads the refs a `getDBSnapshot`
-  result was taken from and returns the printable diff since it.
+- **`getDBSnapshot(inputs)`**: Reads the refs or queries into a `DBSnapshot`
+  (`{ docs, refs }`).
+- **`getDBChangesDiff(before, masks?)`**: Re-reads `before.refs` and returns
+  the printable diff since it.
+- **`expectNoDBChanges(before)`**: Re-reads `before.refs` and fails with the
+  printed diff if any document was added, removed or modified.
 - **`normalizeData(data, options?)`**: Replaces Firestore Timestamps with
   `/Timestamp XXXX/` (indexed in chronological order) and Buffers with
   `/Buffer <base64url>/`, so a snapshot assertion stays stable across runs.
 - **`expectSuccessResult(response)`**, **`testGetFirestoreReset()`**.
 - **`EmulatorHooksOptions`**, **`EmulatorReset`**, **`RequestBuildersOptions`**,
-  **`TestableDBRef`**, **`SnapshotInput`**, **`NormalizeDataOptions`**,
-  **`DBSnapshotChanges`**, **`AddedDocumentSnapshot`**,
-  **`RemovedDocumentSnapshot`**, **`ModifiedDocumentSnapshot`**,
-  **`UnmodifiedDocumentSnapshot`**.
+  **`TestableDBRef`**, **`SnapshotInput`**, **`DBSnapshot`**,
+  **`NormalizeDataOptions`**.
 
 ### `firebase-kit-admin/validation`
 
