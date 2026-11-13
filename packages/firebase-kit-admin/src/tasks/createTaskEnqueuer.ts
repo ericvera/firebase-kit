@@ -4,12 +4,6 @@ import { FirebaseAdminErrorCode } from '../errors/constants.js'
 import { getErrorCode } from '../errors/getErrorCode.js'
 import type { EnqueueTaskOptions, TaskEnqueuerDependencies } from './types.js'
 
-const getAction = (data: object): string | undefined => {
-  const { action } = data as { action?: unknown }
-
-  return typeof action === 'string' ? action : undefined
-}
-
 /**
  * Binds the Cloud Tasks enqueue path to one app. Called once at module scope;
  * the enqueue function it returns is what every per-task helper wraps.
@@ -20,12 +14,12 @@ const getAction = (data: object): string | undefined => {
  * id that is already scheduled is a duplicate of work already pending, so it
  * is logged and swallowed rather than raised. Anything else throws.
  *
- * Both log lines are labeled with `data.action` when it is a string, else
- * `unnamed`.
+ * Both log lines are labeled with `data.action`, which every task's data must
+ * carry.
  */
 export const createTaskEnqueuer =
   (dependencies: TaskEnqueuerDependencies) =>
-  async <TData extends object>({
+  async <TData extends { action: string }>({
     queueName,
     taskId,
     data,
@@ -33,10 +27,11 @@ export const createTaskEnqueuer =
     dispatchDeadlineSeconds,
     logContext,
   }: EnqueueTaskOptions<TData>): Promise<void> => {
-    const label = getAction(data) ?? 'unnamed'
-
     if (dependencies.inEmulator()) {
-      logger.info(`Skipping ${label} task enqueue in emulator`, logContext)
+      logger.info(
+        `Skipping ${data.action} task enqueue in emulator`,
+        logContext,
+      )
 
       return
     }
@@ -51,7 +46,7 @@ export const createTaskEnqueuer =
       })
     } catch (error) {
       if (getErrorCode(error) === FirebaseAdminErrorCode.TaskAlreadyExists) {
-        logger.info(`${label} task already exists, skipping`, logContext)
+        logger.info(`${data.action} task already exists, skipping`, logContext)
 
         return
       }

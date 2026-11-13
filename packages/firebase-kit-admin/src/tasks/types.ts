@@ -9,7 +9,7 @@ export interface TaskEnqueuerDependencies {
 }
 
 /** One enqueue, described end to end. */
-export interface EnqueueTaskOptions<TData> {
+export interface EnqueueTaskOptions<TData extends { action: string }> {
   /** Queue the task is dispatched to. */
   queueName: string
   /**
@@ -17,7 +17,10 @@ export interface EnqueueTaskOptions<TData> {
    * hour after the first, which is what makes a repeated enqueue safe.
    */
   taskId: string
-  /** Payload the queue's handler receives. */
+  /**
+   * Payload the queue's handler receives. Its `action` labels the enqueuer's
+   * log lines.
+   */
   data: TData
   /** How far ahead of now the task should fire. */
   delayMs: number

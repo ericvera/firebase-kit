@@ -141,16 +141,19 @@ it('labels the emulator skip log with data.action', async () => {
   ])
 })
 
-it('labels the emulator skip log unnamed when data has no string action', async () => {
+it('rejects task data without a string action at compile time', async () => {
   const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
 
+  // @ts-expect-error task data must carry an action
   await enqueueTask({ ...createOptions(), data: { entryId: 'entry-1' } })
+  // @ts-expect-error the action must be a string
   await enqueueTask({ ...createOptions(), data: { action: 42 } })
 
-  // Verify: a missing or non-string action both fall back to the placeholder
+  // Verify: there is no fallback label any more; a caller that slips past
+  // the compiler gets data.action as passed
   expect(vi.mocked(logger.info).mock.calls).toEqual([
-    ['Skipping unnamed task enqueue in emulator', { entryId: 'entry-1' }],
-    ['Skipping unnamed task enqueue in emulator', { entryId: 'entry-1' }],
+    ['Skipping undefined task enqueue in emulator', { entryId: 'entry-1' }],
+    ['Skipping 42 task enqueue in emulator', { entryId: 'entry-1' }],
   ])
 })
 

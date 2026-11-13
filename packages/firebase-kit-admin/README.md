@@ -487,7 +487,7 @@ emulator it enqueues nothing, because the Cloud Tasks emulator ignores
 `scheduleTime` and would fire a delayed task the moment it is queued. A task id
 already scheduled is a duplicate of pending work, so it is logged and swallowed
 — which is what makes a repeated enqueue safe. Anything else throws. Both log
-lines are labeled by `data.action` when it is a string, else `unnamed`.
+lines are labeled by `data.action`, so task data must carry a string `action`.
 
 ```typescript
 // src/tasks/enqueueSpaceCleanup.ts
@@ -795,8 +795,8 @@ from `process.env`) follow the same shape.
 ### `firebase-kit-admin/tasks`
 
 - **`createTaskEnqueuer(dependencies)`**: Returns `enqueue(options)`.
-- **`EnqueueTaskOptions`**: `queueName`, `taskId`, `data`, `delayMs`,
-  `dispatchDeadlineSeconds`, `logContext`.
+- **`EnqueueTaskOptions`**: `queueName`, `taskId`, `data` (must carry a string
+  `action`), `delayMs`, `dispatchDeadlineSeconds`, `logContext`.
 - **`TaskEnqueuerDependencies`**: `inEmulator`.
 
 ### `firebase-kit-admin/testing`
