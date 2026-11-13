@@ -18,7 +18,6 @@ const createOptions = () => ({
   data: { action: 'expire-entry', entryId: 'entry-1' },
   delayMs: 60_000,
   dispatchDeadlineSeconds: 300,
-  taskName: 'cleanup',
   logContext: { entryId: 'entry-1' },
 })
 
@@ -132,22 +131,10 @@ it('reads the emulator flag per call rather than at bind time', async () => {
   expect(getEnqueuedTasks()).toHaveLength(1)
 })
 
-it('labels the emulator skip log with taskName when it is passed', async () => {
+it('labels the emulator skip log with data.action', async () => {
   const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
 
   await enqueueTask(createOptions())
-
-  // Verify: existing callers keep their log line unchanged
-  expect(vi.mocked(logger.info).mock.calls).toEqual([
-    ['Skipping cleanup task enqueue in emulator', { entryId: 'entry-1' }],
-  ])
-})
-
-it('labels the emulator skip log with data.action when taskName is omitted', async () => {
-  const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
-  const { taskName, ...options } = createOptions()
-
-  await enqueueTask(options)
 
   expect(vi.mocked(logger.info).mock.calls).toEqual([
     ['Skipping expire-entry task enqueue in emulator', { entryId: 'entry-1' }],
@@ -156,10 +143,9 @@ it('labels the emulator skip log with data.action when taskName is omitted', asy
 
 it('labels the emulator skip log unnamed when data has no string action', async () => {
   const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
-  const { taskName, ...options } = createOptions()
 
-  await enqueueTask({ ...options, data: { entryId: 'entry-1' } })
-  await enqueueTask({ ...options, data: { action: 42 } })
+  await enqueueTask({ ...createOptions(), data: { entryId: 'entry-1' } })
+  await enqueueTask({ ...createOptions(), data: { action: 42 } })
 
   // Verify: a missing or non-string action both fall back to the placeholder
   expect(vi.mocked(logger.info).mock.calls).toEqual([
@@ -168,14 +154,26 @@ it('labels the emulator skip log unnamed when data has no string action', async 
   ])
 })
 
-it('labels the duplicate log with data.action when taskName is omitted', async () => {
+it('labels the duplicate log with data.action', async () => {
   const enqueueTask = createTaskEnqueuer({ inEmulator: () => false })
-  const { taskName, ...options } = createOptions()
 
-  await enqueueTask(options)
-  await enqueueTask(options)
+  await enqueueTask(createOptions())
+  await enqueueTask(createOptions())
 
   expect(vi.mocked(logger.info).mock.calls).toEqual([
     ['expire-entry task already exists, skipping', { entryId: 'entry-1' }],
+  ])
+})
+
+it('rejects taskName at compile time and labels from data.action', async () => {
+  const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
+
+  // @ts-expect-error taskName was removed, so data.action is the label
+  await enqueueTask({ ...createOptions(), taskName: 'cleanup' })
+
+  // Verify: a caller that slips taskName past the compiler still gets the
+  // data.action label
+  expect(vi.mocked(logger.info).mock.calls).toEqual([
+    ['Skipping expire-entry task enqueue in emulator', { entryId: 'entry-1' }],
   ])
 })

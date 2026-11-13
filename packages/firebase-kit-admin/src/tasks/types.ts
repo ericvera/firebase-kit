@@ -23,15 +23,6 @@ export interface EnqueueTaskOptions<TData> {
   delayMs: number
   /** How long a dispatch may run before Cloud Tasks gives up on it. */
   dispatchDeadlineSeconds: number
-  /**
-   * Human name for the task, used to build the skip and duplicate log lines
-   * (`Skipping <name> task enqueue in emulator`).
-   *
-   * @deprecated Pass the label as data.action instead; it is used when
-   * taskName is omitted (falling back to "unnamed"). taskName will be removed
-   * in a future major release.
-   */
-  taskName?: string
   /** Identifiers attached to those log lines so a skip can be traced. */
   logContext: Record<string, unknown>
 }

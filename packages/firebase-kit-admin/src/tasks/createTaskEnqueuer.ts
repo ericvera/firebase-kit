@@ -20,26 +20,20 @@ const getAction = (data: object): string | undefined => {
  * id that is already scheduled is a duplicate of work already pending, so it
  * is logged and swallowed rather than raised. Anything else throws.
  *
- * Both log lines are labeled with `taskName` when passed, else `data.action`
- * when it is a string, else `unnamed`.
+ * Both log lines are labeled with `data.action` when it is a string, else
+ * `unnamed`.
  */
 export const createTaskEnqueuer =
   (dependencies: TaskEnqueuerDependencies) =>
-  async <TData extends object>(
-    options: EnqueueTaskOptions<TData>,
-  ): Promise<void> => {
-    const {
-      queueName,
-      taskId,
-      data,
-      delayMs,
-      dispatchDeadlineSeconds,
-      logContext,
-    } = options
-    // taskName is deprecated for callers; the enqueuer still honors it until
-    // it is removed.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    const label = options.taskName ?? getAction(data) ?? 'unnamed'
+  async <TData extends object>({
+    queueName,
+    taskId,
+    data,
+    delayMs,
+    dispatchDeadlineSeconds,
+    logContext,
+  }: EnqueueTaskOptions<TData>): Promise<void> => {
+    const label = getAction(data) ?? 'unnamed'
 
     if (dependencies.inEmulator()) {
       logger.info(`Skipping ${label} task enqueue in emulator`, logContext)
