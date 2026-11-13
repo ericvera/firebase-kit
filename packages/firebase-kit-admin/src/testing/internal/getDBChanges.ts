@@ -27,7 +27,7 @@ export const getDBChanges = <TCollection extends string = string>(
   const beforeDocs = before.docs.sort(ascCompare((a) => a.updateTime.valueOf()))
   const afterDocs = after.docs.sort(ascCompare((a) => a.updateTime.valueOf()))
 
-  // Masks are keyed by plain string internally; the type parameter only narrows
+  // Masks are keyed by plain string internally. The type parameter only narrows
   // what a caller may name, so widening back here loses nothing.
   const maskKeys = (masks as Record<string, string[]> | undefined) ?? {}
 

@@ -487,8 +487,8 @@ emulator it enqueues nothing, because the Cloud Tasks emulator ignores
 `scheduleTime` and would fire a delayed task the moment it is queued. A task id
 already scheduled is a duplicate of pending work, so it is logged and swallowed
 — which is what makes a repeated enqueue safe. Anything else throws. Both log
-lines are labeled by `data.action`, so task data must carry a string `action`;
-data that reaches it without one at runtime rejects with a
+lines are labeled by `data.action`, so task data must carry a string `action`.
+Data that reaches it without one at runtime rejects with a
 `FunctionsInternalError` before anything is skipped or enqueued.
 
 ```typescript
@@ -770,7 +770,7 @@ from `process.env`) follow the same shape.
   on multiple; throws on none only when `errorIfEmpty` is given. Either throw
   carries `options.details` attached to the error.
 - **`getDocumentsFromQuery(query, reader?)`**: Every document the query matches,
-  each with its `id`; `[]` when it matches none.
+  each with its `id`, or `[]` when it matches none.
 - **`getDocuments(refs, reader?)`**: One entry per ref, in order: the document
   with its `id`, or `undefined` when it does not exist.
 - **`TransactionReader`** / **`TransactionWriter`**: Type-only exports. Both are

@@ -6,7 +6,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 
 /**
  * Masks both sides of a modified document in place. A masked field whose value
- * changed gets `(before)` / `(after)` tokens so the diff still shows it; the
+ * changed gets `(before)` / `(after)` tokens so the diff still shows it. The
  * label tracks only whether it changed, never the value, so output stays stable
  * for randomly generated values. A key on one side only keeps the plain token,
  * since the diff already prints it as `+` or `-`.

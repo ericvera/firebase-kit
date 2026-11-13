@@ -24,8 +24,8 @@ export const getDocuments = async <
     return []
   }
 
-  // The instance-level `getAll` drops the converter's type; this cast is what
-  // the helper exists to hide.
+  // The instance-level `getAll` drops the converter's type, and this cast is
+  // what the helper exists to hide.
   const snapshots = reader
     ? await reader.getAll(...refs)
     : ((await first.firestore.getAll(...refs)) as DocumentSnapshot<DBT, DBT>[])

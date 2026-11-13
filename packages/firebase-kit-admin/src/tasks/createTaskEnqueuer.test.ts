@@ -96,7 +96,7 @@ it('propagates any other enqueue failure', async () => {
 
   const enqueueTask = createTaskEnqueuer({ inEmulator: () => false })
 
-  // Verify: only the already-exists code is absorbed; a real dispatch failure
+  // Verify: only the already-exists code is absorbed. A real dispatch failure
   // has to reach the caller so the work is not silently dropped
   await expect(
     enqueueTask(createOptions()),
@@ -173,7 +173,7 @@ it('rejects task data without a string action outside the emulator', async () =>
   // @ts-expect-error the action must be a string
   const numeric = enqueueTask({ ...createOptions(), data: { action: 42 } })
 
-  // Verify: the guard is not an emulator-only path; the queue is never opened
+  // Verify: the guard is not an emulator-only path. The queue is never opened
   await expect(missing).rejects.toThrowErrorMatchingInlineSnapshot(
     `[Error: Task data action must be a string, got undefined]`,
   )
