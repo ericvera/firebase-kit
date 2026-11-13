@@ -105,18 +105,18 @@ yarn add --dev vitest
 
 ## Entry Points
 
-| Entry point                     | What it provides                                                                                                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `firebase-kit-admin`            | `createInit` — the per-app Admin SDK initializer an entry point calls once per cold start                                                                           |
-| `firebase-kit-admin/auth`       | `checkAuthenticated` and `checkClaimsVersion`: the two guards an authorized handler runs first                                                                      |
-| `firebase-kit-admin/callable`   | `createAPIVersionCheck`, `createOnCallGlobalOptions` and `parseCallableRequest` for grouped callables                                                               |
-| `firebase-kit-admin/errors`     | The `HttpsError` subclasses (`internal`, `unauthenticated`, `permission-denied`, `failed-precondition`, `invalid-argument`) plus `getErrorCode` / `getErrorMessage` |
-| `firebase-kit-admin/firestore`  | `createFirestoreUtils` — ref builders, `runBatch`, `runTransaction` — plus `checkDocumentExists` and `checkDocumentInQueryExists`                                   |
-| `firebase-kit-admin/mocks`      | Factories for the in-memory `firebase-admin` / `firebase-functions` mocks a vitest suite installs in `__mocks__`                                                    |
-| `firebase-kit-admin/runtime`    | `getRuntimeContext`, `inEmulator` and `checkInTestEnvironment`: where this process is actually running                                                              |
-| `firebase-kit-admin/tasks`      | `createTaskEnqueuer` — Cloud Tasks enqueueing that skips in the emulator and tolerates a duplicate id                                                               |
-| `firebase-kit-admin/testing`    | Request builders, DB snapshot/diff helpers, `expectSuccessResult`, and `registerEmulatorHooks`                                                                      |
-| `firebase-kit-admin/validation` | `validateSchemaAndTrim` — a betterbe schema failure turned into a readable `invalid-argument`                                                                       |
+| Entry point                     | What it provides                                                                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `firebase-kit-admin`            | `createInit` — the per-app Admin SDK initializer an entry point calls once per cold start                                                                                  |
+| `firebase-kit-admin/auth`       | `checkAuthenticated` and `checkClaimsVersion`: the two guards an authorized handler runs first                                                                             |
+| `firebase-kit-admin/callable`   | `createAPIVersionCheck`, `createOnCallGlobalOptions` and `parseCallableRequest` for grouped callables                                                                      |
+| `firebase-kit-admin/errors`     | The `HttpsError` subclasses (`internal`, `unauthenticated`, `permission-denied`, `failed-precondition`, `invalid-argument`) plus `getErrorCode` / `getErrorMessage`        |
+| `firebase-kit-admin/firestore`  | `createFirestoreUtils` — ref builders, `runBatch`, `runTransaction` — plus `checkDocumentExists`, `checkDocumentInQueryExists`, `getDocuments` and `getDocumentsFromQuery` |
+| `firebase-kit-admin/mocks`      | Factories for the in-memory `firebase-admin` / `firebase-functions` mocks a vitest suite installs in `__mocks__`                                                           |
+| `firebase-kit-admin/runtime`    | `getRuntimeContext`, `inEmulator` and `checkInTestEnvironment`: where this process is actually running                                                                     |
+| `firebase-kit-admin/tasks`      | `createTaskEnqueuer` — Cloud Tasks enqueueing that skips in the emulator and tolerates a duplicate id                                                                      |
+| `firebase-kit-admin/testing`    | Request builders, DB snapshot/diff helpers, `expectSuccessResult`, and `registerEmulatorHooks`                                                                             |
+| `firebase-kit-admin/validation` | `validateSchemaAndTrim` — a betterbe schema failure turned into a readable `invalid-argument`                                                                              |
 
 ## Usage
 
@@ -288,6 +288,38 @@ pass `errorIfEmpty` — when it matches none. Its options also accept `details`,
 which is passed through to the `FunctionsInternalError` on either throw, so it
 appears in the log entry and in the error the callable's client receives — never
 put secrets in it. `runBatch` covers pure writes with no read step.
+
+`getDocumentsFromQuery` returns every document a query matches, and
+`getDocuments` reads a list of refs in one batch and returns one entry per ref,
+in order, with `undefined` where a document does not exist. Both return each
+document as `{ id, ...data }` and take an optional `TransactionReader` as their
+last argument.
+
+```typescript
+// src/spaces/getSpaces.ts
+import {
+  getDocuments,
+  getDocumentsFromQuery,
+} from 'firebase-kit-admin/firestore'
+import { db } from '../firebase/db.js'
+import { spaceRefs } from './spaceRefs.js'
+import type { DBSpace } from './spaceRefs.js'
+
+type Space = DBSpace & { id: string }
+
+export const getSpacesByHandle = (handle: string): Promise<Space[]> =>
+  getDocumentsFromQuery<Space, DBSpace>(spaceRefs.byHandle(handle))
+
+export const getSpacesById = (
+  spaceIds: string[],
+): Promise<(Space | undefined)[]> =>
+  db.runTransaction(async (reader) =>
+    getDocuments<Space, DBSpace>(
+      spaceIds.map((spaceId) => spaceRefs.doc(spaceId)),
+      reader,
+    ),
+  )
+```
 
 ### `firebase-kit-admin/errors`
 
@@ -687,6 +719,10 @@ from `process.env`) follow the same shape.
 - **`checkDocumentInQueryExists(query, options)`**: At most one document. Throws
   on multiple; throws on none only when `errorIfEmpty` is given. Either throw
   carries `options.details` attached to the error.
+- **`getDocumentsFromQuery(query, reader?)`**: Every document the query matches,
+  each with its `id`; `[]` when it matches none.
+- **`getDocuments(refs, reader?)`**: One entry per ref, in order: the document
+  with its `id`, or `undefined` when it does not exist.
 - **`TransactionReader`** / **`TransactionWriter`**: Type-only exports. Both are
   constructed by `runTransaction` and handed to its callback.
 - **`FirestoreUtilsOptions`**: `databaseId`, `emulatorDatabaseId`.
