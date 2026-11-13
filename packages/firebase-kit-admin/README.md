@@ -550,22 +550,22 @@ export const { createCallableRequest, createHandlerRequestData } =
   })
 ```
 
-An emulator-backed test then snapshots the database before and after the code
-under test and pins the printable diff. `getDBChanges` takes per-collection masks
-for fields whose values are not stable enough to assert on, keyed by the app's
-own collection names. A masked field whose value changed still shows, as a `-` /
-`+` pair whose tokens read `(before)` and `(after)` (for example
-`"/String (before)/"` and `"/String (after)/"`), while an unchanged masked field
-keeps the plain token. This example needs a running Firestore emulator and the
-setup file above.
+An emulator-backed test then snapshots the database with `getDBSnapshot`, runs
+the code under test, and pins the printable diff `getDBDiffSince` returns; it
+re-reads the same refs for the after snapshot, so `before` must be the array
+`getDBSnapshot` returned, not a copy. `getDBDiffSince` takes per-collection
+masks for fields whose values are not stable enough to assert on, keyed by the
+app's own collection names. A masked field whose value changed still shows, as
+a `-` / `+` pair whose tokens read `(before)` and `(after)` (for example
+`"/String (before)/"` and `"/String (after)/"`), while an unchanged masked
+field keeps the plain token. `getDBChanges(before, after, masks?)` and
+`getDBChangesDiff(changes)` remain for a test that needs the changes object
+itself. This example needs a running Firestore emulator and the setup file
+above.
 
 ```typescript
 // src/spaces/renameSpace.emulator.test.ts
-import {
-  getDBChanges,
-  getDBChangesDiff,
-  getDBSnapshot,
-} from 'firebase-kit-admin/testing'
+import { getDBDiffSince, getDBSnapshot } from 'firebase-kit-admin/testing'
 import { expect, it } from 'vitest'
 import { renameSpace } from './renameSpace.js'
 import { spaceRefs } from './spaceRefs.js'
@@ -577,10 +577,9 @@ it('renames the space', async () => {
 
   await renameSpace(undefined, 'space-1', 'Renamed')
 
-  const after = await getDBSnapshot(refs)
-  const changes = getDBChanges(before, after, { spaces: ['updated'] })
-
-  expect(getDBChangesDiff(changes)).toMatchInlineSnapshot()
+  expect(
+    await getDBDiffSince(before, { spaces: ['updated'] }),
+  ).toMatchInlineSnapshot()
 })
 ```
 
@@ -764,6 +763,8 @@ from `process.env`) follow the same shape.
   directly.
 - **`getDBSnapshot(inputs)`**, **`getDBChanges(before, after, masks?)`**,
   **`getDBChangesDiff(changes)`**: The before/after snapshot and printable diff.
+- **`getDBDiffSince(before, masks?)`**: Re-reads the refs a `getDBSnapshot`
+  result was taken from and returns the printable diff since it.
 - **`normalizeData(data, options?)`**: Replaces Firestore Timestamps with
   `/Timestamp XXXX/` (indexed in chronological order) and Buffers with
   `/Buffer <base64url>/`, so a snapshot assertion stays stable across runs.

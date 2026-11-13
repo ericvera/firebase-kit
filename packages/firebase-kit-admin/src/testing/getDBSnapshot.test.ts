@@ -63,3 +63,15 @@ it('reads every query it is given', async () => {
 it('returns an empty list for an empty input array', async () => {
   expect(await getDBSnapshot([])).toEqual([])
 })
+
+it('returns an array with no extra own enumerable keys', async () => {
+  const docs = await getDBSnapshot(
+    createQuery(['entries/entry-1', 'entries/entry-2']),
+  )
+
+  // Verify: the refs record lives off the array, so equality and key
+  // iteration see a plain array of the same docs
+  expect(docs).toEqual([...docs])
+  expect(docs).toStrictEqual([...docs])
+  expect(Object.keys(docs)).toEqual(['0', '1'])
+})

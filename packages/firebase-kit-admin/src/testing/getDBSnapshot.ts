@@ -1,4 +1,5 @@
 import type { Query, QueryDocumentSnapshot } from 'firebase-admin/firestore'
+import { registerSnapshotInputs } from './internal/snapshotInputs.js'
 
 /**
  * A ref object that can hand back a query over its whole collection. Accepted
@@ -17,8 +18,10 @@ const isTestableDBRef = (input: SnapshotInput): input is TestableDBRef =>
 
 /**
  * Reads every document behind the given refs or queries into a flat list. An
- * emulator-backed test takes one snapshot before the code under test runs and
- * one after, then feeds the pair to `getDBChanges`.
+ * emulator-backed test takes one snapshot before the code under test runs,
+ * then hands it to `getDBDiffSince`, which re-reads the same refs for the after
+ * snapshot. A test that needs the changes object instead takes the after
+ * snapshot itself and feeds the pair to `getDBChanges`.
  */
 export const getDBSnapshot = async (
   inputs: SnapshotInput | SnapshotInput[],
@@ -31,5 +34,8 @@ export const getDBSnapshot = async (
 
   const results = await Promise.all(queries.map((query) => query.get()))
 
-  return results.flatMap((result) => result.docs)
+  const docs = results.flatMap((result) => result.docs)
+  registerSnapshotInputs(docs, inputArray)
+
+  return docs
 }
