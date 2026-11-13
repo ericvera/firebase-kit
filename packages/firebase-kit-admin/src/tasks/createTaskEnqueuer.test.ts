@@ -6,6 +6,7 @@ import {
   setEnqueueFailure,
   taskQueueMock,
 } from '../__mocks__/firebase-admin/functions/index.js'
+import { FunctionsInternalError } from '../errors/FunctionsInternalError.js'
 import { FirebaseAdminErrorCode } from '../errors/constants.js'
 import { createTaskEnqueuer } from './createTaskEnqueuer.js'
 
@@ -145,16 +146,45 @@ it('rejects task data without a string action at compile time', async () => {
   const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
 
   // @ts-expect-error task data must carry an action
-  await enqueueTask({ ...createOptions(), data: { entryId: 'entry-1' } })
+  const missing = enqueueTask({ ...createOptions(), data: { entryId: 'e-1' } })
   // @ts-expect-error the action must be a string
-  await enqueueTask({ ...createOptions(), data: { action: 42 } })
+  const numeric = enqueueTask({ ...createOptions(), data: { action: 42 } })
 
-  // Verify: there is no fallback label any more; a caller that slips past
-  // the compiler gets data.action as passed
-  expect(vi.mocked(logger.info).mock.calls).toEqual([
-    ['Skipping undefined task enqueue in emulator', { entryId: 'entry-1' }],
-    ['Skipping 42 task enqueue in emulator', { entryId: 'entry-1' }],
-  ])
+  // Verify: a caller that slips past the compiler fails loudly before the
+  // emulator check, so nothing is logged as skipped and nothing is enqueued
+  await expect(missing).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Task data action must be a string, got undefined]`,
+  )
+  await expect(numeric).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Task data action must be a string, got number]`,
+  )
+  await expect(missing).rejects.toBeInstanceOf(FunctionsInternalError)
+  await expect(numeric).rejects.toBeInstanceOf(FunctionsInternalError)
+  expect(logger.info).not.toHaveBeenCalled()
+  expect(taskQueueMock).not.toHaveBeenCalled()
+  expect(getEnqueuedTasks()).toEqual([])
+})
+
+it('rejects task data without a string action outside the emulator', async () => {
+  const enqueueTask = createTaskEnqueuer({ inEmulator: () => false })
+
+  // @ts-expect-error task data must carry an action
+  const missing = enqueueTask({ ...createOptions(), data: { entryId: 'e-1' } })
+  // @ts-expect-error the action must be a string
+  const numeric = enqueueTask({ ...createOptions(), data: { action: 42 } })
+
+  // Verify: the guard is not an emulator-only path; the queue is never opened
+  await expect(missing).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Task data action must be a string, got undefined]`,
+  )
+  await expect(numeric).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: Task data action must be a string, got number]`,
+  )
+  await expect(missing).rejects.toBeInstanceOf(FunctionsInternalError)
+  await expect(numeric).rejects.toBeInstanceOf(FunctionsInternalError)
+  expect(logger.info).not.toHaveBeenCalled()
+  expect(taskQueueMock).not.toHaveBeenCalled()
+  expect(getEnqueuedTasks()).toEqual([])
 })
 
 it('labels the duplicate log with data.action', async () => {

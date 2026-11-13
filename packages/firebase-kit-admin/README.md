@@ -487,7 +487,9 @@ emulator it enqueues nothing, because the Cloud Tasks emulator ignores
 `scheduleTime` and would fire a delayed task the moment it is queued. A task id
 already scheduled is a duplicate of pending work, so it is logged and swallowed
 — which is what makes a repeated enqueue safe. Anything else throws. Both log
-lines are labeled by `data.action`, so task data must carry a string `action`.
+lines are labeled by `data.action`, so task data must carry a string `action`;
+data that reaches it without one at runtime rejects with a
+`FunctionsInternalError` before anything is skipped or enqueued.
 
 ```typescript
 // src/tasks/enqueueSpaceCleanup.ts
