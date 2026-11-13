@@ -418,3 +418,10 @@ Round 3 raised no blocking finding. Two minor findings stand as notes:
 ## Superseded at review (2026-11-13)
 
 The owner changed several decisions above during review. The current record is `## Amendments` in spec.md: `taskName` is removed and task data must carry a string `action`; `getDBSnapshot` returns an object carrying its refs; the public diff API is `getDBChangesDiff(before, masks?)` and `expectNoDBChanges(before)`, with `getDBChanges` internal and `getDBDiffSince` never shipped; masked fields leave the timestamp numbering and a masked Timestamp prints `/Timestamp/`; the release is breaking. "The three existing functions stay exported" under Task 3 no longer holds.
+
+## Amendment critic round (2026-11-13)
+
+No blocking finding over tasks 03_01 to 03_04 and 04_01. One minor note for the
+review round to check: 03_03's test "leaves a Timestamp inside a masked map out
+of the numbering" only proves the change if the masked `meta.at` is earlier
+than the unmasked Timestamp; otherwise it passes on the old code too.
