@@ -212,3 +212,7 @@ Nothing. `taskName` removal is a later breaking release.
 | `01_03_db_diff_since.md` | Adds `getDBDiffSince` backed by a WeakMap of snapshot inputs | `src/testing/internal/snapshotInputs.ts`, `src/testing/getDBSnapshot.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/index.ts`, `README.md` (admin) |
 | `01_04_optional_task_name.md` | Makes `taskName` optional and derives the log label from `data.action` | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 | `01_05_inline_docs.md` | Documents the `server.deps.inline` requirement in both READMEs | `packages/firebase-kit-admin/README.md`, `packages/firebase-kit-client/README.md` |
+
+## Amendments
+
+- 2026-11-13 `taskName` is removed from `EnqueueTaskOptions` outright instead of being kept optional and `@deprecated`: the log label is `data.action`, else `unnamed`; the lint exception, the `@deprecated` JSDoc, the `taskName` tests and every README mention of `taskName` go. The release becomes a breaking change: the squashed commit must carry a `BREAKING CHANGE:` footer naming the removal (a caller that still passes `taskName` no longer compiles), which bumps the major on all three packages. This supersedes the "Task 5" and "Release — one regular feature" decisions in goals.md and the 01_04 design above — the owner asked for it at review — tasks: 02_01
