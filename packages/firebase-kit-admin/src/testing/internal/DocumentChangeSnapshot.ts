@@ -42,16 +42,21 @@ const generateHash = (data: unknown): string => {
 
 /**
  * Creates a normalized ID for a document path based on the content of the
- * document whose path is received (e.g. parent path for a subcCollection item).
+ * document whose path is received (e.g. an ancestor of a subcollection item at
+ * `childPath`).
  */
 const getNormalizedIDForPath = (
   path: string,
+  childPath: string,
   docs: QueryDocumentSnapshot[],
 ): string => {
   const doc = docs.find((d) => d.ref.path === path)
 
   if (!doc) {
-    throw new Error(`Document not found for path: ${path}`)
+    const collectionPath = path.split('/').slice(0, -1).join('/')
+    throw new Error(
+      `Document not found for path: ${path} (an ancestor of ${childPath}). Add a ref or query covering the ${collectionPath} collection to getDBSnapshot, so the ancestor is in the snapshot.`,
+    )
   }
 
   const currentData = doc.data()
@@ -73,27 +78,27 @@ const getNormalizedIDForPath = (
 
 /**
  * Returns a normalized path for a document, replacing the last segment with
- * '[ID]' and normalizing the parent path if it is a subcollection.
+ * '[ID]' and every ancestor document id with a hash of that ancestor's
+ * content. Every ancestor document must be in `allDocs`.
  */
 const getDocPath = (
   doc: QueryDocumentSnapshot,
   allDocs: QueryDocumentSnapshot[],
 ): string => {
-  const pathSegments = doc.ref.path.split('/')
+  const segments = doc.ref.path.split('/')
+  const output = [...segments]
 
-  // Handle subcollections (length 4)
-  if (pathSegments.length === 4) {
-    // Since we've checked length is 4, we know these elements exist
-    const parentPath = pathSegments.slice(0, 2).join('/')
-    pathSegments[1] = getNormalizedIDForPath(parentPath, allDocs)
-  } else if (pathSegments.length > 4) {
-    throw new Error('Path segments longer than 4 not supported yet.')
+  for (let i = 1; i < segments.length - 1; i += 2) {
+    output[i] = getNormalizedIDForPath(
+      segments.slice(0, i + 1).join('/'),
+      doc.ref.path,
+      allDocs,
+    )
   }
 
-  // Always replace the last segment with [ID]
-  pathSegments[pathSegments.length - 1] = '[ID]'
+  output[output.length - 1] = '[ID]'
 
-  return pathSegments.join('/')
+  return output.join('/')
 }
 
 // Proposed base class
