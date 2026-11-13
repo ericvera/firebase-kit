@@ -15,8 +15,10 @@ Range: `origin/main...HEAD`, all under `packages/`. The release is breaking: the
 - **03_03** (`f87ed8b`) — **breaking output**: masked fields are left out of the `/Timestamp NNNN/` numbering, and a masked Timestamp prints `"/Timestamp/"` (was `"/String/"`). Verify: `yarn test:unit`, `src/testing/internal/getDBChanges.test.ts`.
 - **03_04** (`9a1786b`) — docs only: the admin README documents the two-call API. Verify: read the testing section and its example.
 - **04_01** (`49fdab0`) — **breaking**: task data is typed `TData extends { action: string }`; the log label is `data.action`; `getAction` and the `unnamed` fallback are gone. Verify: `yarn build`, `yarn test:unit`.
+- **05_01** (`617d437`) — the DB diff normalizes document paths at any depth; the 4-segment limit is gone and a missing ancestor is named in the error. Not breaking: 2- and 4-segment paths print as before. Verify: `yarn test:unit`, `src/testing/internal/DocumentChangeSnapshot.test.ts`.
+- **Review fixes** — `a0c6adf` assigns awaited helper results to a variable before asserting (README, emulator tests, unit tests); `cc2f0c0` makes the enqueue function reject with `FunctionsInternalError` when `data.action` is not a string, before the emulator check; `1d41961` removes mid-sentence semicolons from prose this branch wrote.
 
-Every code task ran `yarn lint`, `yarn build` and `yarn test:unit`; `yarn test:emulator` last ran after 03_03, and only docs and `src/tasks` changed after it. README snippets were type-checked in a throwaway project built from `yarn pack`. Both review rounds (the original 24 files, then the 26 files changed by the amendments) returned no blocking finding.
+Every code task ran `yarn lint`, `yarn build` and `yarn test:unit`; `yarn test:emulator` last ran after 03_03, and only docs and `src/tasks` changed after it. README snippets were type-checked in a throwaway project built from `yarn pack`. A full run without `-u` after the review fixes passed (admin 57 files / 271 unit tests, client 33 / 240, 39 emulator tests, no snapshot written), and 05_01 passed all four commands after it. Every review round (the original 24 files, the 26 changed by the amendments, the 2 changed by 05_01) returned no blocking finding.
 
 ## Open assumptions
 
@@ -28,6 +30,7 @@ Every code task ran `yarn lint`, `yarn build` and `yarn test:unit`; `yarn test:e
 
 ## Left unfixed
 
+- 10 older mid-sentence semicolons in README prose this branch did not write (4 admin, 4 client, 2 protocol); the owner has not said whether to fix them here.
 - Minor, first review round: `packages/firebase-kit-client/README.md` says "its cached reads import `getApp` from `firebase/app`"; every Firestore read does.
 - Found by the 01_05 implementer: the admin README never says the functions mock needs `resetFunctionsMock` in `beforeEach`.
 - Minor, amendment critic: 03_03's "Timestamp inside a masked map" test only proves the change if the masked timestamp is the earlier one; the implementer reported the two numbering tests failing before the change, but this one was not separately confirmed.
@@ -40,3 +43,4 @@ All dated 2026-11-13, decided by the owner at review; full text under `## Amendm
 2. `getDBSnapshot` returns an object carrying its refs; no module-level state (03_01).
 3. Two-call diff API, `getDBChanges` internal, masked fields out of the timestamp numbering, masked Timestamp prints `/Timestamp/` (03_02 to 03_04).
 4. Task data must be `{ action: string }` (04_01).
+5. Diff paths at any depth (05_01); not breaking.
