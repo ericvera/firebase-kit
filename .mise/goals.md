@@ -145,7 +145,9 @@ What the descriptions change against the investigation:
   after/changes/diff lines; the code under test stays a plain statement between
   the two (not a callback). The three existing functions stay exported. The
   README example at `firebase-kit-admin/README.md:527-550` moves to the new
-  call.
+  call. Confirmed again after the task description was read: the owner prefers
+  the new call to take the after snapshot internally over the task's narrower
+  before-and-after-in helper.
 
 - **Task 2 (`getDocuments(refs)`) — a missing document comes back as
   `undefined` in its position**, so the result lines up with the refs passed
@@ -160,9 +162,7 @@ What the descriptions change against the investigation:
 
 ## Assumptions
 
-- Task 3: the planner checks whether a snapshot already carries its refs; if it
-  does not, the new call takes `refs` again or the snapshot starts carrying
-  them. The helper's name is also the planner's to propose.
+- Task 3: the helper's name is the planner's to propose.
 - Tasks 1 and 2 are in scope and share one design (typed `{ id, ...data }`
   results, optional `TransactionReader`).
 - Task 5: a `taskName` that is passed still labels the log lines, `data.action`
@@ -172,15 +172,42 @@ What the descriptions change against the investigation:
 
 ## Open questions
 
-Asked, awaiting the owner's pick:
+The owner asked for three things to be investigated before picking. A second
+investigation answers them; its report goes under `## Investigation round 2`.
 
-1. Task 3 (snapshot-diff helper): keep the decided shape (the new call also
-   takes the after snapshot), switch to the task's narrower helper (before and
-   after in, diff out), or build both?
-2. Task 4 (mask after comparison): as the new default, behind an opt-in option,
-   or drop?
-3. Task 6 (spike on `server.deps.inline`): its own branch, a written evaluation
-   in this run, or evaluate and build the winner in this run?
+1. **Task 3 — does a snapshot carry its refs?** Does the value `getDBSnapshot`
+   returns include the refs (or queries) it was taken from? If not, can it start
+   carrying them without affecting existing code — existing callers of
+   `getDBSnapshot`, `getDBChanges` and `getDBChangesDiff`, anything that
+   serializes, compares or iterates a snapshot, and the snapshot's exported
+   type? What is the least intrusive way for the new call to take the after
+   snapshot itself?
+2. **Task 4 — a concrete example.** The owner does not follow the change in the
+   abstract. Using the real rendered format (from the existing tests and their
+   inline snapshots), produce one small worked example: a document with a
+   masked string field whose value is overwritten and one unmasked field that
+   also changes — the exact diff text today, and the exact diff text after
+   masking moves to after the comparison. Add the same pair for a document where
+   only the masked field changes. Note how timestamps render today
+   (`/Timestamp NNNN/`) and whether they already show as changed.
+3. **Task 6 — what this is and why the owner would want it.** The owner has no
+   picture of this task. Across all three packages, establish: what a consumer
+   has to put in its vitest config today and what breaks without it; which
+   imports inside the kit a consumer's `vi.mock` has to reach, and from which
+   entry points; which kit APIs already take their firebase collaborators as
+   injected dependencies and which import them directly; what each candidate
+   (injected dependencies everywhere, a documented vitest preset, leaving it as
+   documented) would change for a consumer and what it would cost in this repo,
+   including public API and breaking changes; and whether the requirement is
+   avoidable at all. End with a plain recommendation on whether it is worth
+   doing.
+
+Still the owner's pick, after that report:
+
+- Task 4 (mask after comparison): as the new default, behind an opt-in option,
+  or drop?
+- Task 6 (spike on `server.deps.inline`): build something in this run, do it
+  later on its own branch, or leave it as documented?
 
 Next round:
 
