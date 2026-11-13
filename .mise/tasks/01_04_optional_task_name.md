@@ -43,10 +43,20 @@ None. The mise config lists no Skills & guides entries.
    `@deprecated Pass the label as data.action instead; it is used when taskName is omitted (falling back to "unnamed"). taskName will be removed in a future major release.`
 2. `createTaskEnqueuer.ts`: a small module-level helper
    `const getAction = (data: object): string | undefined` returning
-   `(data as { action?: unknown }).action` only when it is a string. Compute
-   `const label = taskName ?? getAction(data) ?? 'unnamed'` once at the top of the
-   returned function; use `label` in both `logger.info` lines (text otherwise
-   unchanged). Update the function JSDoc with the label order.
+   `(data as { action?: unknown }).action` only when it is a string. Remove
+   `taskName` from the parameter destructure (today `:25`): take the parameter as
+   `options: EnqueueTaskOptions<TData>` and destructure the other fields from it
+   in the body. Compute the label once at the top of the returned function, with
+   the only read of `taskName` in the file on that one line:
+
+   ```ts
+   // taskName is deprecated for callers; the enqueuer still honors it until it is removed.
+   // eslint-disable-next-line @typescript-eslint/no-deprecated
+   const label = options.taskName ?? getAction(data) ?? 'unnamed'
+   ```
+
+   Use `label` in both `logger.info` lines (text otherwise unchanged). Update the
+   function JSDoc with the label order.
 3. `README.md` (admin):
    - `### firebase-kit-admin/tasks` example (near lines 461-480): give the data
      an `action` (e.g. `interface SpaceCleanupData { action: 'space-cleanup'; spaceId: string }`,
@@ -61,6 +71,12 @@ None. The mise config lists no Skills & guides entries.
 - `TData extends object` stays; do not add an `action` constraint (that would
   break callers whose data lacks it).
 - An explicit empty-string `taskName` keeps today's behavior (`??`, not `||`).
+- `yarn lint` uses `tseslint.configs.strictTypeChecked`, which enables
+  `@typescript-eslint/no-deprecated`. Any read of `taskName` (destructured or
+  `options.taskName`) is flagged; passing it in an object literal is not, so the
+  test fixture needs no change. Keep `@deprecated` and keep exactly one read with
+  the one `eslint-disable-next-line` above it. Do not drop `@deprecated`, add a
+  file-wide disable, or edit the ESLint config.
 - Test file convention: `vi.mock` calls directly below imports, `vi.hoisted`
   above them, other declarations below. The existing tests use
   `resetFunctionsMock()` in `beforeEach`; `mockReset: true` resets the logger spy.

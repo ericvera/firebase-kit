@@ -163,6 +163,11 @@ Only the masked field changed:
   `(data as { action?: unknown }).action` and returns it only when it is a
   string. Both `logger.info` lines use `label`. `TData extends object` does not
   change.
+- `@typescript-eslint/no-deprecated` (on via `strictTypeChecked`) flags every
+  read of `taskName`. `taskName` leaves the parameter destructure; the
+  parameter is `options`, and `options.taskName` is read once, in the `label`
+  line, under a single `// eslint-disable-next-line @typescript-eslint/no-deprecated`
+  with a reason comment. `@deprecated` stays; no config change.
 
 ### README `server.deps.inline` gaps (task 01_05)
 
