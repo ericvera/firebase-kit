@@ -4,8 +4,9 @@
 
 Five changes to `packages/firebase-kit-admin` plus two README fixes, released as
 one commit carrying a `BREAKING CHANGE:` footer that names the removal of
-`EnqueueTaskOptions.taskName` (amendment 02_01), which bumps the major on all
-three packages.
+`EnqueueTaskOptions.taskName` (amendment 02_01) and the change of
+`getDBSnapshot`'s return value from an array to a `DBSnapshot` object
+(amendment 03_01), which bumps the major on all three packages.
 
 1. **`getDocumentsFromQuery(query, reader?)`** (`firebase-kit-admin/firestore`):
    runs a query, through the `TransactionReader` when one is given, and returns
@@ -20,7 +21,11 @@ three packages.
    after snapshot itself from the refs the `before` snapshot was taken from,
    then returns the printable `DB DIFF` string. Replaces the
    after/changes/diff lines of every emulator test; the code under test stays a
-   plain statement between `getDBSnapshot` and this call.
+   plain statement between `getDBSnapshot` and this call. `getDBSnapshot`
+   returns an exported `DBSnapshot` object, `{ docs, refs }`, holding the
+   documents and the inputs they were read from; `getDBChanges` and
+   `getDBDiffSince` take that object, and plain arrays are no longer accepted
+   (amendment 03_01). There is no module-level state.
 4. **Changed masked fields get labeled tokens** (default, no switch): in a
    modified document, a masked field whose value changed prints
    `"/String (before)/"` on the before side and `"/String (after)/"` on the after
@@ -131,33 +136,52 @@ Only the masked field changed:
   }
 ```
 
-### `getDBDiffSince` (task 01_03)
+### `getDBDiffSince` (task 01_03, reshaped by amendment 03_01)
 
-- New internal `testing/internal/snapshotInputs.ts`: a module-level
-  `WeakMap<QueryDocumentSnapshot[], SnapshotInput[]>` with
-  `registerSnapshotInputs(docs, inputs)` and
-  `getSnapshotInputs(docs): SnapshotInput[] | undefined`.
-- `getDBSnapshot.ts`: registers the returned array against its normalized input
-  array before returning it. Signature, return type and exported types are
-  unchanged. A WeakMap entry is invisible to iteration, spread, JSON and
-  `toEqual`, and survives `getDBChanges`' in-place sort.
-- New `testing/getDBDiffSince.ts`:
+01_03 shipped this with a module-level `WeakMap` side table
+(`testing/internal/snapshotInputs.ts`) keyed by the array `getDBSnapshot`
+returned. Amendment 03_01 replaces that: the snapshot is a plain object that
+carries its refs, and the side table and its error are deleted.
+
+- `getDBSnapshot.ts` exports:
+
+  ```ts
+  export interface DBSnapshot {
+    docs: QueryDocumentSnapshot[]
+    refs: SnapshotInput[]
+  }
+
+  export const getDBSnapshot = async (
+    inputs: SnapshotInput | SnapshotInput[],
+  ): Promise<DBSnapshot>
+  ```
+
+  `docs` is the flat list of every input's documents, in input order; `refs` is
+  the normalized input array (a single input wrapped in an array).
+- `getDBChanges.ts`: `getDBChanges(before: DBSnapshot, after: DBSnapshot,
+  masks?)`. It reads `before.docs` / `after.docs` where it read the arrays
+  before; the in-place sort of those `docs` arrays, the masking and every
+  `DocumentChangeSnapshot` constructor call (passed `after.docs` /
+  `before.docs`) are unchanged. `refs` is ignored.
+- `getDBDiffSince.ts`:
 
   ```ts
   export const getDBDiffSince = async <TCollection extends string = string>(
-    before: QueryDocumentSnapshot[],
+    before: DBSnapshot,
     masks?: Partial<Record<TCollection, string[]>>,
   ): Promise<string>
   ```
 
-  Looks up `before`'s inputs; if none, throws
-  `Error('getDBDiffSince needs the array getDBSnapshot returned; a copy made with slice, spread or filter does not carry the refs it was taken from')`.
-  Otherwise `getDBSnapshot(inputs)` → `getDBChanges(before, after, masks)` →
-  `getDBChangesDiff(changes)`.
-- Exported from `testing/index.ts`. `getDBSnapshot`, `getDBChanges` and
-  `getDBChangesDiff` stay exported and unchanged. The README example at
-  `README.md:527-550` moves to the new call. Existing repo emulator tests keep
-  the three-step form.
+  `getDBSnapshot(before.refs)` → `getDBChanges(before, after, masks)` →
+  `getDBChangesDiff(changes)`. It never throws for a missing record; any
+  `{ docs, refs }` value works.
+- `testing/internal/snapshotInputs.ts` is deleted. `DBSnapshot` reaches
+  `firebase-kit-admin/testing` through the existing
+  `export * from './getDBSnapshot.js'` in `testing/index.ts`.
+- `getDBChangesDiff` is unchanged. The README example's code is unchanged (it
+  only passes the snapshot along); its prose and the API reference describe
+  `DBSnapshot`. Existing repo emulator tests keep the three-step form and need
+  no change, since they only pass snapshots to `getDBChanges`.
 
 ### Optional `taskName` (task 01_04)
 
@@ -192,13 +216,19 @@ along with its `@deprecated` JSDoc, the lint exception, its tests and every
 README mention. The release is breaking: the squashed commit carries a
 `BREAKING CHANGE:` footer naming the removal (major on all three packages).
 
+`testing/internal/snapshotInputs.ts` (the `WeakMap` side table 01_03 added) and
+`getDBDiffSince`'s "needs the array getDBSnapshot returned" error are removed in
+this release (amendment 03_01), and `getDBSnapshot` / `getDBChanges` stop
+returning / accepting bare arrays. The same `BREAKING CHANGE:` footer names it.
+
 ## Hard-to-undo
 
 - Public API additions in a published package: `getDocumentsFromQuery` and
-  `getDocuments` (`firebase-kit-admin/firestore`), `getDBDiffSince`
-  (`firebase-kit-admin/testing`). No `exports` subpath is added or removed.
-- Public type change: `EnqueueTaskOptions.taskName` becomes optional and
-  `@deprecated` (additive).
+  `getDocuments` (`firebase-kit-admin/firestore`), `getDBDiffSince` and the
+  `DBSnapshot` type (`firebase-kit-admin/testing`). No `exports` subpath is
+  added or removed.
+- `EnqueueTaskOptions.taskName`: see the 02_01 removal below (the earlier
+  optional/`@deprecated` step never ships).
 - Default output of `getDBChanges` / `getDBChangesDiff` /
   `ModifiedDocumentSnapshot.getDiff()` changes for every modified document with
   a masked field whose value changed: the field prints a `(before)` / `(after)`
@@ -215,6 +245,15 @@ README mention. The release is breaking: the squashed commit carries a
   still passes it no longer compiles. The squashed commit must carry a
   `BREAKING CHANGE:` footer naming the removal, which bumps the major on all
   three packages (they version together).
+- Amendment 2026-11-13 (03_01): public API change in `firebase-kit-admin/testing`.
+  `getDBSnapshot` returns a `DBSnapshot` object (`{ docs, refs }`) instead of
+  `QueryDocumentSnapshot[]`; `getDBChanges` and `getDBDiffSince` accept only
+  that object, not plain arrays. A consumer test that iterates a snapshot, reads
+  `.length`, asserts `toEqual([])` on it, or passes a hand-built array to
+  `getDBChanges` no longer compiles and must use `.docs` / build a
+  `{ docs, refs }`; a test that only passes snapshots from `getDBSnapshot` to
+  `getDBChanges` is unaffected. The same squashed `BREAKING CHANGE:` footer
+  must name this second change.
 - No new dependency, no data writes or deletes, schema or migrations, money, or
   repo-wide commands.
 
@@ -224,10 +263,11 @@ README mention. The release is breaking: the squashed commit carries a
 | --- | --- | --- |
 | `01_01_firestore_read_helpers.md` | Adds `getDocumentsFromQuery` and `getDocuments` with emulator tests and README docs | `src/firestore/getDocumentsFromQuery.ts`, `src/firestore/getDocuments.ts`, `src/firestore/index.ts`, `README.md` (admin) |
 | `01_02_mask_after_comparison.md` | Shows a changed masked value as a `(before)` / `(after)` token pair | `src/testing/internal/maskProps.ts`, `src/testing/internal/maskModifiedProps.ts`, `src/testing/getDBChanges.ts`, `README.md` (admin) |
-| `01_03_db_diff_since.md` | Adds `getDBDiffSince` backed by a WeakMap of snapshot inputs | `src/testing/internal/snapshotInputs.ts`, `src/testing/getDBSnapshot.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/index.ts`, `README.md` (admin) |
+| `01_03_db_diff_since.md` | Adds `getDBDiffSince` backed by a WeakMap of snapshot inputs (replaced by 03_01) | `src/testing/internal/snapshotInputs.ts`, `src/testing/getDBSnapshot.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/index.ts`, `README.md` (admin) |
 | `01_04_optional_task_name.md` | Makes `taskName` optional and derives the log label from `data.action` | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 | `01_05_inline_docs.md` | Documents the `server.deps.inline` requirement in both READMEs | `packages/firebase-kit-admin/README.md`, `packages/firebase-kit-client/README.md` |
 | `02_01_remove_task_name.md` | Removes `taskName` from `EnqueueTaskOptions`; labels task logs from `data.action`, else `unnamed` (breaking) | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
+| `03_01_snapshot_object.md` | `getDBSnapshot` returns an exported `DBSnapshot` `{ docs, refs }`; `getDBChanges` / `getDBDiffSince` take it; deletes the WeakMap side table (breaking) | `src/testing/getDBSnapshot.ts`, `src/testing/getDBChanges.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/internal/snapshotInputs.ts` (delete), `README.md` (admin) |
 
 ## Amendments
 

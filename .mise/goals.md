@@ -160,7 +160,7 @@ What the descriptions change against the investigation:
 - **Consumer follow-ups are out of scope.** Each task names call sites to update
   in the consuming app; those live outside this repo.
 
-- **Task 3 — the snapshot remembers its refs.** `getDBSnapshot` records, in a
+- **Superseded on 2026-11-13: the owner objected to module-level state; `getDBSnapshot` now returns an object carrying its refs, a breaking change. See `## Amendments` in spec.md.** **Task 3 — the snapshot remembers its refs.** `getDBSnapshot` records, in a
   hidden side table keyed by the array it returns, the refs that array was taken
   from; the new call reads them to take the after snapshot, so its arguments are
   the before snapshot and the optional masks. A snapshot it has no record of (a

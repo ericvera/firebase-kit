@@ -5,12 +5,12 @@
   "steps": {
     "goals": "done",
     "spec": "done",
-    "critic": "done",
+    "critic": null,
     "execute": null,
     "review": null,
     "gate": null
   },
-  "amendments": 1,
+  "amendments": 2,
   "checks_from": "9ec4f55cf39a00eb155b15a51b1ef9b7aa65ff54",
   "fix_rounds": 0
 }
