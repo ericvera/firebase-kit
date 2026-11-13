@@ -397,3 +397,20 @@ Two minor findings, accepted: 01_02 cites line numbers past the end of
 `internal/DocumentChangeSnapshot.ts` (the method is at :188-190, the module
 function at :16-33); 01_05 must state the `root` setting outright, because the
 admin README's mocks live under `src/__mocks__`.
+
+## Critic rounds 2 and 3
+
+Round 2 raised one blocking finding, accepted and fixed by the planner: 01_04
+marked `taskName` `@deprecated` while still reading it, which the repo's
+`@typescript-eslint/no-deprecated` rule rejects. The task now reads it on one
+line under a stated lint exception and keeps `@deprecated`.
+
+Round 3 raised no blocking finding. Two minor findings stand as notes:
+
+- The reason comment 01_04 gives for that line is 92 characters at its indent,
+  over the repo's 80-character limit for comments, so it has to be wrapped onto
+  two lines.
+- "Additive" overstates the `taskName` change. It is additive for callers that
+  pass the option. Code that reads `taskName` from an `EnqueueTaskOptions` value
+  now gets `string | undefined` and, under a strict lint config, a deprecation
+  error. The release stays a plain `feat:` as the owner chose.
