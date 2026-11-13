@@ -189,7 +189,9 @@ What the descriptions change against the investigation:
   Timestamp that was rewritten shows as changed too (the owner rarely masks
   timestamps, because the timestamp index already shows their changes). No new
   dependency — `pretty-format` is not added — and no editing of printed text.
-  The label wording is the open question below.
+  The labels are `(before)` and `(after)`, added inside the existing type token:
+  `"/String (before)/"` on the before side and `"/String (after)/"` on the
+  after side, and likewise for every other type token.
 
 - **Release — one regular feature.** Everything on this branch squashes into one
   `feat:` commit with no `BREAKING CHANGE:` footer; the owner chose to ship the
@@ -383,26 +385,15 @@ for its token.
 - **Skips:** none. The run adds public exports across three areas of the admin
   package, so spec and critic both run.
 
-## Open questions
+## Critic round 1
 
-Critic round 1 raised one blocking finding: task 4 reaches further than the
-owner approved, because a masked Timestamp counts as changed every time it is
-rewritten (the README masks `updated`). The owner's answer: they rarely mask
-timestamps, since the timestamp index already shows changes, so no special case
-for timestamps is needed — every masked field that changed shows as changed.
+One blocking finding, accepted: task 4 reached further than the owner had
+approved, because a masked Timestamp counts as changed every time it is
+rewritten (the README masks `updated`). The owner re-confirmed the default with
+that reach in view and changed the approach to distinct tokens; the result is
+the Task 4 decision above.
 
-The owner then proposed distinct tokens for a changed masked field instead of
-identical lines, and chose that approach (recorded under Decisions). Awaiting
-the owner's pick:
-
-1. The label on a changed masked field's tokens. Candidates, the last two the
-   owner's own: `/String v1/` → `/String v2/`; `/String (before)/` →
-   `/String (after)/`; `/String (initial)/` → `/String (changed)/`. Driver
-   recommends before/after: it is the vocabulary the testing helpers already use
-   for the two snapshots, and "initial" can read as the value the field was
-   first created with, which the before value need not be.
-
-Minor critic findings to pass to the planner with the answer: 01_02 cites line
-numbers past the end of `internal/DocumentChangeSnapshot.ts` (the method is at
-:188-190, the module function at :16-33); 01_05 must state the `root` setting
-outright, because the admin README's mocks live under `src/__mocks__`.
+Two minor findings, accepted: 01_02 cites line numbers past the end of
+`internal/DocumentChangeSnapshot.ts` (the method is at :188-190, the module
+function at :16-33); 01_05 must state the `root` setting outright, because the
+admin README's mocks live under `src/__mocks__`.
