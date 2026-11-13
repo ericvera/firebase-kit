@@ -19,10 +19,14 @@ one `feat:` commit with no `BREAKING CHANGE:` footer.
    then returns the printable `DB DIFF` string. Replaces the
    after/changes/diff lines of every emulator test; the code under test stays a
    plain statement between `getDBSnapshot` and this call.
-4. **Masked values compared before masking** (default, no switch): a masked
-   field whose value changed prints as a `-` / `+` pair of lines that both show
-   the mask token, and a document whose only change is a masked field no longer
-   prints an empty body. Output for every other case is byte-identical to today.
+4. **Changed masked fields get labeled tokens** (default, no switch): in a
+   modified document, a masked field whose value changed prints
+   `"/String (before)/"` on the before side and `"/String (after)/"` on the after
+   side (likewise for every other type token), so jest-diff shows the `-` / `+`
+   pair. A masked field that did not change, and every masked field of an added
+   or removed document, keeps the plain token. A document whose only change is a
+   masked field no longer prints an empty body. No special case for timestamps:
+   a masked Timestamp that was rewritten counts as changed.
 5. **`taskName` optional** in `EnqueueTaskOptions`, marked `@deprecated`. The
    log label is `taskName` when passed, else `data.action` when it is a string,
    else `unnamed`.
@@ -69,50 +73,56 @@ export const getDocuments = async <
   `data()` is `undefined` maps to `undefined`.
 - Both export from `firestore/index.ts` with `export *`.
 
-### Masking after comparison (task 01_02)
+### Labeled tokens for changed masked fields (task 01_02)
 
 Today `getDBChanges` masks each side (`internal/maskProps.ts`, in place) before
 the comparison, so a masked field whose raw value changed but whose type token
-did not is invisible. The fix keeps masking where it is but records, for a
-modified document, which masked keys really changed, and lets the diff compare
-one rendering and display another.
+did not prints the same token on both sides and is invisible. The fix makes the
+masking step of a modified document, which has both normalized values at hand,
+emit distinct tokens for a changed masked field; the diff stays plain jest-diff.
 
-- New internal `testing/internal/getChangedMaskedKeys.ts`:
-  `getChangedMaskedKeys(before: unknown, after: unknown, collection: string,
-  maskKeys: Record<string, string[]>): string[]`. Returns the collection's
-  masked keys that are present (not `undefined`) on both sides and whose
-  normalized values differ by `isDeepStrictEqual` from `node:util`. A key present
-  on only one side is excluded, because it already prints as `+` or `-`.
-- `getDBChanges.ts`: in the added/modified loop, look up the before entry and
-  call `getChangedMaskedKeys` on the two normalized (unmasked) values before
-  either `maskProps` call runs (both mutate). Pass the result as a new last
-  constructor argument `changedMaskedKeys: string[] = []` of
-  `ModifiedDocumentSnapshot`. Added, removed and unmodified paths are unchanged.
-- `internal/DocumentChangeSnapshot.ts` `ModifiedDocumentSnapshot.getDiff()`:
-  with no changed masked keys, it calls the existing `getDiff` (output
-  unchanged). Otherwise it builds compare copies of both masked objects in which
-  each changed key's value is made distinct (before gets `<token>\u0000before`,
-  after gets `<token>\u0000after`; tokens are always one-line strings), formats
-  display data with pretty-format's `format(value)` and compare data with
-  `format(value, { indent: 0 })`, splits each on `\n`, and calls jest-diff's
-  `diffLinesUnified2(aDisplay, bDisplay, aCompare, bCompare, options)` with the
-  same options object `getDiff` passes today. That is exactly what jest-diff's
-  own `compareObjects` does (`node_modules/jest-diff/build/index.js:1543-1555`),
-  except the compare lines differ from the display lines only on the changed
-  masked keys.
-- New runtime dependency: `pretty-format` (`^30.5.1`, the version jest-diff
-  30.5.2 pins) in `firebase-kit-admin` `dependencies`, because jest-diff does not
-  re-export `format`. Run `yarn install` to update `yarn.lock`.
-- `maskProps` itself does not change.
+- `internal/maskProps.ts`: `getTypeToken(value, label?: 'before' | 'after')` is
+  exported; with a label it returns `/<Type> (<label>)/` (`/String (before)/`),
+  without one the plain token as today. `maskProps` behavior is unchanged.
+- New internal `testing/internal/maskModifiedProps.ts`:
+  `maskModifiedProps(before: unknown, after: unknown, collection: string,
+  maskKeys: Record<string, string[]>): void`, masking both in place. For each
+  masked key present (not `undefined`) on both sides whose normalized values
+  differ by `isDeepStrictEqual` (`node:util`), before gets the `(before)` token
+  and after the `(after)` token; every other present masked value gets the
+  plain token. Non-object values fall back to `maskProps`.
+- `getDBChanges.ts`: the added branch masks with `maskProps`; a doc present on
+  both sides is masked with `maskModifiedProps` instead of two `maskProps`
+  calls. The removed loop, the in-place sort and every constructor signature
+  are unchanged.
+- `internal/DocumentChangeSnapshot.ts` does not change: with distinct tokens,
+  its existing jest-diff call prints the pair like any other change.
+- The label depends only on whether the value changed, so output is stable
+  across runs. A masked Timestamp is the string `/Timestamp NNNN/` when masked,
+  so it gets `/String/`, and a rewritten one `/String (before)/` /
+  `/String (after)/`; there is no timestamp special case. A masked field whose
+  type changed prints e.g. `/String (before)/` / `/Number (after)/` (today
+  `/String/` / `/Number/`).
+- No new dependency and no editing of printed text.
 
-Worked output (masked `secret`, `name` also changed):
+Worked output (masked `secret` overwritten, `name` also changed):
 
 ```
   Object {
 -   "name": "Draft",
--   "secret": "/String/",
+-   "secret": "/String (before)/",
 +   "name": "Final",
-+   "secret": "/String/",
++   "secret": "/String (after)/",
+  }
+```
+
+Only the masked field changed:
+
+```
+  Object {
+    "name": "Draft",
+-   "secret": "/String (before)/",
++   "secret": "/String (after)/",
   }
 ```
 
@@ -158,7 +168,8 @@ Worked output (masked `secret`, `name` also changed):
 
 Docs only, in `packages/firebase-kit-admin/README.md` (new short subsection in
 `firebase-kit-admin/mocks` with a `vitest.config.ts` block inlining
-`firebase-kit-admin`, explaining that a bare `vi.mock('firebase-admin/…')` or
+`firebase-kit-admin` and setting `root` to `src`, as the client's block does,
+because the admin README's shims live under `src/__mocks__`; explaining that a bare `vi.mock('firebase-admin/…')` or
 `vi.mock('firebase-functions')` only reaches imports made inside the kit when
 vitest stops externalizing it) and `packages/firebase-kit-client/README.md`
 (the prose around `:111-137` names the `firebase/functions` and `firebase/app`
@@ -175,21 +186,24 @@ Nothing. `taskName` removal is a later breaking release.
   (`firebase-kit-admin/testing`). No `exports` subpath is added or removed.
 - Public type change: `EnqueueTaskOptions.taskName` becomes optional and
   `@deprecated` (additive).
-- Default output of `getDBChangesDiff` / `ModifiedDocumentSnapshot.getDiff()`
-  changes for a modified document with a changed masked field; consumer inline
-  snapshots covering such an overwrite change once. Shipped as a regular
-  feature, no `BREAKING CHANGE:` footer (owner decision).
-- New runtime dependency `pretty-format` in the published `firebase-kit-admin`
-  (`dependencies`, plus `yarn.lock`).
-- No data writes or deletes, schema or migrations, money, or repo-wide
-  commands.
+- Default output of `getDBChanges` / `getDBChangesDiff` /
+  `ModifiedDocumentSnapshot.getDiff()` changes for every modified document with
+  a masked field whose value changed: the field prints a `(before)` / `(after)`
+  token pair. That includes masked timestamp-like fields, which count as changed
+  every time they are rewritten (the admin README's own mask,
+  `{ spaces: ['updated'] }`, is that case), and masked fields whose type
+  changed. Every consumer inline snapshot covering such a document changes once.
+  Shipped as a regular feature, no `BREAKING CHANGE:` footer (owner decision,
+  re-confirmed with that reach in view).
+- No new dependency, no data writes or deletes, schema or migrations, money, or
+  repo-wide commands.
 
 ## Task index
 
 | Task file | What it does | Files |
 | --- | --- | --- |
 | `01_01_firestore_read_helpers.md` | Adds `getDocumentsFromQuery` and `getDocuments` with emulator tests and README docs | `src/firestore/getDocumentsFromQuery.ts`, `src/firestore/getDocuments.ts`, `src/firestore/index.ts`, `README.md` (admin) |
-| `01_02_mask_after_comparison.md` | Shows a changed masked value as a `-` / `+` token pair | `src/testing/internal/getChangedMaskedKeys.ts`, `src/testing/getDBChanges.ts`, `src/testing/internal/DocumentChangeSnapshot.ts`, `package.json` (admin, + `yarn.lock`), `README.md` (admin) |
+| `01_02_mask_after_comparison.md` | Shows a changed masked value as a `(before)` / `(after)` token pair | `src/testing/internal/maskProps.ts`, `src/testing/internal/maskModifiedProps.ts`, `src/testing/getDBChanges.ts`, `README.md` (admin) |
 | `01_03_db_diff_since.md` | Adds `getDBDiffSince` backed by a WeakMap of snapshot inputs | `src/testing/internal/snapshotInputs.ts`, `src/testing/getDBSnapshot.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/index.ts`, `README.md` (admin) |
 | `01_04_optional_task_name.md` | Makes `taskName` optional and derives the log label from `data.action` | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 | `01_05_inline_docs.md` | Documents the `server.deps.inline` requirement in both READMEs | `packages/firebase-kit-admin/README.md`, `packages/firebase-kit-client/README.md` |

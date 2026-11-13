@@ -63,9 +63,16 @@ None. The mise config lists no Skills & guides entries.
    inside `firebase-kit-admin` when vitest stops externalizing it, and what fails
    without it (the kit's own call goes to the real module, e.g. the enqueuer
    reaches the real `getFunctions`, so the dedup path is not exercised). Keep it
-   consistent with the client README's wording. If the admin README's example
-   config needs a `root` setting for `__mocks__` resolution like the client's,
-   mirror it; otherwise keep the block minimal.
+   consistent with the client README's wording. The block also sets
+   `root: join(import.meta.dirname, 'src')` (with `import { join } from 'node:path'`),
+   mirroring the client's block at `firebase-kit-client/README.md:116-132`
+   including its comment: the admin README's shims live under `src/__mocks__/...`
+   (`firebase-kit-admin/README.md:565,588,609`), and vitest resolves
+   `__mocks__` relative to `root`, so without it a bare `vi.mock(...)`
+   auto-mocks the real module (`firebase-kit-client/README.md:120-125`). Add no
+   `setupFiles` entry: the only setup file the admin README shows
+   (`src/__test__/setup/emulator.setup.ts`, `README.md:493`) belongs to the
+   emulator suite, not to a suite using the mocks.
 2. Client README, prose before and after the block at lines 111-137: state that
    inlining `firebase-kit-client` is also what lets the `firebase/functions` and
    `firebase/app` mocks from `### firebase-kit-client/mocks` reach the imports
