@@ -200,6 +200,11 @@ Nothing. `taskName` removal is a later breaking release.
   changed. Every consumer inline snapshot covering such a document changes once.
   Shipped as a regular feature, no `BREAKING CHANGE:` footer (owner decision,
   re-confirmed with that reach in view).
+- Amendment 2026-11-13 (02_01): public API removal. `EnqueueTaskOptions.taskName`
+  is deleted (superseding the optional/`@deprecated` item above); a caller that
+  still passes it no longer compiles. The squashed commit must carry a
+  `BREAKING CHANGE:` footer naming the removal, which bumps the major on all
+  three packages (they version together).
 - No new dependency, no data writes or deletes, schema or migrations, money, or
   repo-wide commands.
 
@@ -212,6 +217,7 @@ Nothing. `taskName` removal is a later breaking release.
 | `01_03_db_diff_since.md` | Adds `getDBDiffSince` backed by a WeakMap of snapshot inputs | `src/testing/internal/snapshotInputs.ts`, `src/testing/getDBSnapshot.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/index.ts`, `README.md` (admin) |
 | `01_04_optional_task_name.md` | Makes `taskName` optional and derives the log label from `data.action` | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 | `01_05_inline_docs.md` | Documents the `server.deps.inline` requirement in both READMEs | `packages/firebase-kit-admin/README.md`, `packages/firebase-kit-client/README.md` |
+| `02_01_remove_task_name.md` | Removes `taskName` from `EnqueueTaskOptions`; labels task logs from `data.action`, else `unnamed` (breaking) | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 
 ## Amendments
 
