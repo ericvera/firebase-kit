@@ -9,7 +9,8 @@ one commit carrying a `BREAKING CHANGE:` footer that names the removal of
 (amendment 03_01), and the reshaped testing diff API (amendment 03_02:
 `getDBChanges` and the changes-object types leave the public API,
 `getDBChangesDiff` takes a before snapshot instead of a changes object, and
-masked fields leave the timestamp numbering), which bumps the major on all
+masked fields leave the timestamp numbering), and the requirement that task
+data carry a string `action` (amendment 04_01), which bumps the major on all
 three packages.
 
 1. **`getDocumentsFromQuery(query, reader?)`** (`firebase-kit-admin/firestore`):
@@ -60,7 +61,10 @@ three packages.
    the spike.
 
 Item 5 is superseded by amendment 02_01: `taskName` is removed from
-`EnqueueTaskOptions` and the log label is `data.action`, else `unnamed`.
+`EnqueueTaskOptions`. Amendment 04_01 then replaces 02_01's label rule
+(`data.action`, else `unnamed`): the enqueue function and `EnqueueTaskOptions`
+take `TData extends { action: string }`, and the log label is `data.action`
+directly, with no fallback.
 
 Out of scope: consumer call-site updates; any vitest preset
 or dependency injection for the spike.
@@ -283,6 +287,27 @@ timestamp therefore takes an index and shifts every later timestamp's number.
   line, under a single `// eslint-disable-next-line @typescript-eslint/no-deprecated`
   with a reason comment. `@deprecated` stays; no config change.
 
+02_01 removed `taskName` and kept `TData extends object` with the label
+`getAction(data) ?? 'unnamed'`. That label rule is superseded by 04_01 below.
+
+### Task data carries its action (task 04_01)
+
+- `tasks/types.ts`: `export interface EnqueueTaskOptions<TData extends { action: string }>`,
+  no default.
+- `tasks/createTaskEnqueuer.ts`: the returned function is
+  `async <TData extends { action: string }>(options: EnqueueTaskOptions<TData>)`.
+  Both `logger.info` lines interpolate `data.action` directly. `getAction`, its
+  `data as { action?: unknown }` cast and the `'unnamed'` fallback are deleted.
+  `getFunctions().taskQueue<TData>` is unchanged (firebase-admin's `Args` is
+  unconstrained).
+- Task data without a string `action` is a compile error. A JavaScript caller
+  that omits it gets `undefined` interpolated into the log line; there is no
+  runtime check.
+- `createTaskRequest<T>` and the functions mocks do not reference
+  `EnqueueTaskOptions` and keep their typings. The README example's
+  `SpaceCleanupData` already has `action: 'space-cleanup'`. The README prose and
+  the `EnqueueTaskOptions` API entry state the requirement.
+
 ### README `server.deps.inline` gaps (task 01_05)
 
 Docs only, in `packages/firebase-kit-admin/README.md` (new short subsection in
@@ -300,6 +325,11 @@ mocks alongside `getsetdel` as reasons for inlining `firebase-kit-client`).
 along with its `@deprecated` JSDoc, the lint exception, its tests and every
 README mention. The release is breaking: the squashed commit carries a
 `BREAKING CHANGE:` footer naming the removal (major on all three packages).
+
+Amendment 04_01 (task 04_01) removes `getAction` and the `unnamed` label
+fallback from `tasks/createTaskEnqueuer.ts`, along with the unit test that
+pinned `unnamed`, and stops accepting task data without a string `action`. The
+same `BREAKING CHANGE:` footer names it.
 
 `testing/internal/snapshotInputs.ts` (the `WeakMap` side table 01_03 added) and
 `getDBDiffSince`'s "needs the array getDBSnapshot returned" error are removed in
@@ -366,6 +396,13 @@ kept as type-only exports. The same `BREAKING CHANGE:` footer names it.
   snapshot that masks a timestamp field changes once. A Timestamp nested in a
   masked Map or Array is still covered by `/Map/` / `/Array/`. Other mask tokens
   do not change.
+- Amendment 2026-11-13 (04_01): public API type change in
+  `firebase-kit-admin/tasks`. `createTaskEnqueuer`'s enqueue function and
+  `EnqueueTaskOptions` take `TData extends { action: string }` (was
+  `TData extends object` / unconstrained), so a caller whose task data has no
+  string `action` no longer compiles. The `unnamed` log label is gone. Loosening
+  the constraint later is additive; tightening it was the major. The same
+  squashed `BREAKING CHANGE:` footer must name it.
 - No new dependency, no data writes or deletes, schema or migrations, money, or
   repo-wide commands.
 
@@ -378,11 +415,12 @@ kept as type-only exports. The same `BREAKING CHANGE:` footer names it.
 | `01_03_db_diff_since.md` | Adds `getDBDiffSince` backed by a WeakMap of snapshot inputs (replaced by 03_01, renamed by 03_02) | `src/testing/internal/snapshotInputs.ts`, `src/testing/getDBSnapshot.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/index.ts`, `README.md` (admin) |
 | `01_04_optional_task_name.md` | Makes `taskName` optional and derives the log label from `data.action` | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 | `01_05_inline_docs.md` | Documents the `server.deps.inline` requirement in both READMEs | `packages/firebase-kit-admin/README.md`, `packages/firebase-kit-client/README.md` |
-| `02_01_remove_task_name.md` | Removes `taskName` from `EnqueueTaskOptions`; labels task logs from `data.action`, else `unnamed` (breaking) | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
+| `02_01_remove_task_name.md` | Removes `taskName` from `EnqueueTaskOptions`; labels task logs from `data.action`, else `unnamed` (label rule superseded by 04_01) (breaking) | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 | `03_01_snapshot_object.md` | `getDBSnapshot` returns an exported `DBSnapshot` `{ docs, refs }`; `getDBChanges` / `getDBDiffSince` take it; deletes the WeakMap side table (breaking) | `src/testing/getDBSnapshot.ts`, `src/testing/getDBChanges.ts`, `src/testing/getDBDiffSince.ts`, `src/testing/internal/snapshotInputs.ts` (delete) |
 | `03_02_two_call_diff_api.md` | Makes `getDBChanges` and the changes renderer internal, renames `getDBDiffSince` to `getDBChangesDiff`, adds `expectNoDBChanges`, drops the changes-object type exports, moves the emulator tests (breaking) | `src/testing/internal/getDBChanges.ts` (moved), `src/testing/internal/formatDBChanges.ts` (moved), `src/testing/getDBChangesDiff.ts` (replaced), `src/testing/expectNoDBChanges.ts` (new), `src/testing/index.ts` |
 | `03_03_masked_timestamp_numbering.md` | Masks before normalizing so masked fields leave the `/Timestamp NNNN/` numbering; a masked Timestamp prints `/Timestamp/` instead of `/String/` | `src/testing/internal/getDBChanges.ts`, `src/testing/internal/maskProps.ts`, `src/testing/internal/maskModifiedProps.ts` |
 | `03_04_readme_two_call_api.md` | Moves the admin README's testing section and API reference to `getDBChangesDiff(before)` / `expectNoDBChanges(before)` and `DBSnapshot` | `packages/firebase-kit-admin/README.md` |
+| `04_01_task_data_requires_action.md` | Types the enqueue function and `EnqueueTaskOptions` as `TData extends { action: string }`; labels logs from `data.action` directly; deletes `getAction` and the `unnamed` fallback (breaking) | `src/tasks/types.ts`, `src/tasks/createTaskEnqueuer.ts`, `README.md` (admin) |
 
 ## Amendments
 
