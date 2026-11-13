@@ -1,4 +1,4 @@
-import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
+import type { DBSnapshot } from './getDBSnapshot.js'
 import { ascCompare } from './internal/ascCompare.js'
 import type { DBSnapshotChanges } from './internal/DocumentChangeSnapshot.js'
 import {
@@ -18,13 +18,16 @@ import { normalizeData } from './internal/normalizeData.js'
  * assert on; the type parameter lets an app key it by its own collection enum
  * so a typo in a collection name fails to compile.
  *
- * Both snapshot arrays are sorted in place.
+ * Both snapshots' `docs` arrays are sorted in place.
  */
 export const getDBChanges = <TCollection extends string = string>(
-  beforeDocs: QueryDocumentSnapshot[],
-  afterDocs: QueryDocumentSnapshot[],
+  before: DBSnapshot,
+  after: DBSnapshot,
   masks?: Partial<Record<TCollection, string[]>>,
 ): DBSnapshotChanges => {
+  const beforeDocs = before.docs
+  const afterDocs = after.docs
+
   // Masks are keyed by plain string internally; the type parameter only narrows
   // what a caller may name, so widening back here loses nothing.
   const maskKeys = (masks as Record<string, string[]> | undefined) ?? {}

@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { createDBSnapshot } from '../__test__/utils/createDBSnapshot.js'
 import { createDocSnapshot } from '../__test__/utils/createDocSnapshot.js'
 import { getDBChanges } from './getDBChanges.js'
 import { getDBChangesDiff } from './getDBChangesDiff.js'
@@ -17,8 +18,8 @@ it('renders the envelope with a section per change', () => {
   const newDoc = createDoc('spaces/new', { name: 'new' }, 3000)
 
   const changes = getDBChanges(
-    [stable, changedBefore, goneDoc],
-    [stable, changedAfter, newDoc],
+    createDBSnapshot([stable, changedBefore, goneDoc]),
+    createDBSnapshot([stable, changedAfter, newDoc]),
   )
 
   // Verify: the `DB DIFF` header, one headed section per added, removed and
@@ -65,7 +66,11 @@ it('renders a body for a document whose only change is masked', () => {
     2000,
   )
 
-  const changes = getDBChanges([before], [after], { entries: ['secret'] })
+  const changes = getDBChanges(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+    { entries: ['secret'] },
+  )
 
   // Verify: the masked change prints as a labelled pair rather than leaving the
   // MODIFIED section empty
@@ -86,7 +91,10 @@ it('renders a body for a document whose only change is masked', () => {
 it('renders just the header when nothing changed', () => {
   const stable = createDoc('entries/stable', { name: 'stable' }, 1000)
 
-  const changes = getDBChanges([stable], [stable])
+  const changes = getDBChanges(
+    createDBSnapshot([stable]),
+    createDBSnapshot([stable]),
+  )
 
   expect(getDBChangesDiff(changes)).toMatchInlineSnapshot(`
     "DB DIFF
@@ -98,7 +106,10 @@ it('renders just the header when nothing changed', () => {
 it('drops the leading line of an added or removed diff', () => {
   const goneDoc = createDoc('entries/gone', { name: 'gone' }, 1000)
 
-  const changes = getDBChanges([goneDoc], [])
+  const changes = getDBChanges(
+    createDBSnapshot([goneDoc]),
+    createDBSnapshot([]),
+  )
   const [removed] = changes.removed
   const rawDiff = removed?.getDiff() ?? ''
 
@@ -118,7 +129,10 @@ it('orders the sections so the output is stable across runs', () => {
   const first = createDoc('entries/first', { name: 'first' }, 1000)
   const second = createDoc('spaces/second', { name: 'second' }, 2000)
 
-  const changes = getDBChanges([], [first, second])
+  const changes = getDBChanges(
+    createDBSnapshot([]),
+    createDBSnapshot([first, second]),
+  )
   const inOrder = getDBChangesDiff(changes)
 
   changes.added.reverse()

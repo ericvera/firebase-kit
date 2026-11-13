@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore'
 import { expect, it } from 'vitest'
+import { createDBSnapshot } from '../__test__/utils/createDBSnapshot.js'
 import { createDocSnapshot } from '../__test__/utils/createDocSnapshot.js'
 import { getDBChanges } from './getDBChanges.js'
 
@@ -19,8 +20,8 @@ it('sorts every document into added, removed, modified or unmodified', () => {
   const newDoc = createEntry('new', { name: 'new' }, 3000)
 
   const changes = getDBChanges(
-    [stable, changedBefore, goneDoc],
-    [stable, changedAfter, newDoc],
+    createDBSnapshot([stable, changedBefore, goneDoc]),
+    createDBSnapshot([stable, changedAfter, newDoc]),
   )
 
   // Verify: presence on each side decides added vs removed, and for a document
@@ -39,7 +40,10 @@ it('treats a document whose data changed but whose updateTime did not as unmodif
   const before = createEntry('entry-1', { name: 'before' }, 1000)
   const after = createEntry('entry-1', { name: 'after' }, 1000)
 
-  const changes = getDBChanges([before], [after])
+  const changes = getDBChanges(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+  )
 
   // Verify: `updateTime` is the authority — this is what lets a suite tell an
   // untouched document from one rewritten with the same content
@@ -50,7 +54,10 @@ it('treats a document whose data changed but whose updateTime did not as unmodif
 it('reports the removed document contents', () => {
   const goneDoc = createEntry('gone', { name: 'gone' }, 1000)
 
-  const changes = getDBChanges([goneDoc], [])
+  const changes = getDBChanges(
+    createDBSnapshot([goneDoc]),
+    createDBSnapshot([]),
+  )
 
   expect(changes.removed.map((snapshot) => snapshot.getDiff()))
     .toMatchInlineSnapshot(`
@@ -75,9 +82,13 @@ it('applies masks per collection', () => {
     updateTimeMs: 1000,
   })
 
-  const changes = getDBChanges<Collection>([], [entry, space], {
-    entries: ['secret'],
-  })
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([]),
+    createDBSnapshot([entry, space]),
+    {
+      entries: ['secret'],
+    },
+  )
 
   // Verify: the mask is keyed by the document's parent collection, so the
   // `entries` secret is replaced by its type token while the `spaces` one — not
@@ -102,9 +113,13 @@ it('labels a masked field that changed on a modified document', () => {
   const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
   const after = createEntry('entry-1', { name: 'Final', secret: 'b' }, 2000)
 
-  const changes = getDBChanges<Collection>([before], [after], {
-    entries: ['secret'],
-  })
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+    {
+      entries: ['secret'],
+    },
+  )
 
   // Verify: the overwritten secret shows as a `-` / `+` pair alongside the
   // visible change, without revealing either value
@@ -125,9 +140,13 @@ it('shows a modified document whose only change is a masked field', () => {
   const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
   const after = createEntry('entry-1', { name: 'Draft', secret: 'b' }, 2000)
 
-  const changes = getDBChanges<Collection>([before], [after], {
-    entries: ['secret'],
-  })
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+    {
+      entries: ['secret'],
+    },
+  )
 
   // Verify: the masked change alone is enough to produce a diff body
   expect(changes.modified.map((snapshot) => snapshot.getDiff()))
@@ -146,9 +165,13 @@ it('keeps the plain token for an unchanged masked field on a modified document',
   const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
   const after = createEntry('entry-1', { name: 'Final', secret: 'a' }, 2000)
 
-  const changes = getDBChanges<Collection>([before], [after], {
-    entries: ['secret'],
-  })
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+    {
+      entries: ['secret'],
+    },
+  )
 
   expect(changes.modified.map((snapshot) => snapshot.getDiff()))
     .toMatchInlineSnapshot(`
@@ -170,9 +193,13 @@ it('labels a masked timestamp that was rewritten', () => {
   )
   const after = createEntry('entry-1', { at: Timestamp.fromMillis(5000) }, 2000)
 
-  const changes = getDBChanges<Collection>([before], [after], {
-    entries: ['at'],
-  })
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+    {
+      entries: ['at'],
+    },
+  )
 
   // Verify: there is no timestamp special case — the normalized index differs,
   // so the masked field reads as changed
@@ -190,7 +217,7 @@ it('labels a masked timestamp that was rewritten', () => {
 it('masks nothing when no masks are given', () => {
   const entry = createEntry('entry-1', { secret: 'entry-secret' }, 1000)
 
-  const changes = getDBChanges([], [entry])
+  const changes = getDBChanges(createDBSnapshot([]), createDBSnapshot([entry]))
 
   // Verify: the default the inlined body applies for an absent mask is an empty
   // object, which masks nothing rather than throwing
@@ -213,7 +240,10 @@ it('indexes timestamps across both snapshots together', () => {
   )
   const after = createEntry('entry-1', { at: Timestamp.fromMillis(5000) }, 2000)
 
-  const changes = getDBChanges([before], [after])
+  const changes = getDBChanges(
+    createDBSnapshot([before]),
+    createDBSnapshot([after]),
+  )
 
   // Verify: both documents' timestamps are collected before any of them is
   // normalized, so the diff reads as "moved from the earlier instant to the
@@ -232,18 +262,18 @@ it('indexes timestamps across both snapshots together', () => {
 it('sorts both snapshot arrays in place', () => {
   const later = createEntry('later', {}, 5000)
   const earlier = createEntry('earlier', {}, 1000)
-  const beforeDocs = [later, earlier]
-  const afterDocs = [later, earlier]
+  const before = createDBSnapshot([later, earlier])
+  const after = createDBSnapshot([later, earlier])
 
-  getDBChanges(beforeDocs, afterDocs)
+  getDBChanges(before, after)
 
   // Verify: the ported implementation sorts its inputs rather than copying them
   // — a caller reusing the arrays afterwards sees the new order
-  expect(beforeDocs.map((doc) => doc.ref.path)).toEqual([
+  expect(before.docs.map((doc) => doc.ref.path)).toEqual([
     'entries/earlier',
     'entries/later',
   ])
-  expect(afterDocs.map((doc) => doc.ref.path)).toEqual([
+  expect(after.docs.map((doc) => doc.ref.path)).toEqual([
     'entries/earlier',
     'entries/later',
   ])

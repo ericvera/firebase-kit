@@ -1,13 +1,11 @@
 import type { Query, QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import { expect, it, vi } from 'vitest'
+import { createDBSnapshot } from '../__test__/utils/createDBSnapshot.js'
 import { createDocSnapshot } from '../__test__/utils/createDocSnapshot.js'
 import { getDBChanges } from './getDBChanges.js'
 import { getDBChangesDiff } from './getDBChangesDiff.js'
 import { getDBDiffSince } from './getDBDiffSince.js'
 import { getDBSnapshot } from './getDBSnapshot.js'
-
-const MissingRefsError =
-  'getDBDiffSince needs the array getDBSnapshot returned; a copy made with slice, spread or filter does not carry the refs it was taken from'
 
 const createMutableQuery = (initial: QueryDocumentSnapshot[]) => {
   const state = { docs: initial }
@@ -49,7 +47,9 @@ it('returns the same diff as the three-step form', async () => {
 
   const diff = await getDBDiffSince(before)
 
-  const expected = getDBChangesDiff(getDBChanges(beforeDocs(), afterDocs()))
+  const expected = getDBChangesDiff(
+    getDBChanges(createDBSnapshot(beforeDocs()), createDBSnapshot(afterDocs())),
+  )
 
   // Verify: added, modified and removed docs all render exactly as the
   // explicit snapshot/changes/diff sequence would
@@ -68,34 +68,41 @@ it('passes masks through to getDBChanges', async () => {
   const diff = await getDBDiffSince(before, masks)
 
   const expected = getDBChangesDiff(
-    getDBChanges(beforeDocs(), afterDocs(), masks),
+    getDBChanges(
+      createDBSnapshot(beforeDocs()),
+      createDBSnapshot(afterDocs()),
+      masks,
+    ),
   )
 
   expect(diff).toBe(expected)
   expect(diff).not.toBe(await getDBDiffSince(before))
 })
 
-it('can be called twice on the same before snapshot', async () => {
+it('gives the same diff when called twice on one before snapshot', async () => {
   const { state, query } = createMutableQuery(beforeDocs())
   const before = await getDBSnapshot(query)
   state.docs = afterDocs()
 
   const first = await getDBDiffSince(before)
 
-  // Verify: the in-place sort keeps the array's identity, so its refs record
-  // survives the first call
+  // Verify: the first call's in-place sort of before.docs leaves the second
+  // call's diff unchanged
   expect(await getDBDiffSince(before)).toBe(first)
 })
 
-it.each([
-  ['a spread copy', (docs: QueryDocumentSnapshot[]) => [...docs]],
-  ['a slice copy', (docs: QueryDocumentSnapshot[]) => docs.slice()],
-  ['a hand-built array', () => beforeDocs()],
-])('throws for %s', async (_label, copy) => {
-  const { query } = createMutableQuery(beforeDocs())
-  const before = await getDBSnapshot(query)
+it('accepts a hand-built snapshot', async () => {
+  const { state, query } = createMutableQuery(beforeDocs())
+  const taken = await getDBSnapshot(query)
+  state.docs = afterDocs()
 
-  await expect(getDBDiffSince(copy(before))).rejects.toThrow(MissingRefsError)
+  const expected = await getDBDiffSince(taken)
+
+  // Verify: nothing ties refs to getDBSnapshot, so any { docs, refs } value
+  // re-reads its refs the same way
+  expect(await getDBDiffSince(createDBSnapshot(beforeDocs(), [query]))).toBe(
+    expected,
+  )
 })
 
 it('re-reads every input, refs object and bare query', async () => {
