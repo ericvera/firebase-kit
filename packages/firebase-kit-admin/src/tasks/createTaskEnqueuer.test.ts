@@ -1,3 +1,4 @@
+import { logger } from 'firebase-functions'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   getEnqueuedTasks,
@@ -129,4 +130,52 @@ it('reads the emulator flag per call rather than at bind time', async () => {
   // Verify: the bind runs at module load, long before a test can intercept the
   // app's detection — only a call-time dereference sees the change
   expect(getEnqueuedTasks()).toHaveLength(1)
+})
+
+it('labels the emulator skip log with taskName when it is passed', async () => {
+  const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
+
+  await enqueueTask(createOptions())
+
+  // Verify: existing callers keep their log line unchanged
+  expect(vi.mocked(logger.info).mock.calls).toEqual([
+    ['Skipping cleanup task enqueue in emulator', { entryId: 'entry-1' }],
+  ])
+})
+
+it('labels the emulator skip log with data.action when taskName is omitted', async () => {
+  const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
+  const { taskName, ...options } = createOptions()
+
+  await enqueueTask(options)
+
+  expect(vi.mocked(logger.info).mock.calls).toEqual([
+    ['Skipping expire-entry task enqueue in emulator', { entryId: 'entry-1' }],
+  ])
+})
+
+it('labels the emulator skip log unnamed when data has no string action', async () => {
+  const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
+  const { taskName, ...options } = createOptions()
+
+  await enqueueTask({ ...options, data: { entryId: 'entry-1' } })
+  await enqueueTask({ ...options, data: { action: 42 } })
+
+  // Verify: a missing or non-string action both fall back to the placeholder
+  expect(vi.mocked(logger.info).mock.calls).toEqual([
+    ['Skipping unnamed task enqueue in emulator', { entryId: 'entry-1' }],
+    ['Skipping unnamed task enqueue in emulator', { entryId: 'entry-1' }],
+  ])
+})
+
+it('labels the duplicate log with data.action when taskName is omitted', async () => {
+  const enqueueTask = createTaskEnqueuer({ inEmulator: () => false })
+  const { taskName, ...options } = createOptions()
+
+  await enqueueTask(options)
+  await enqueueTask(options)
+
+  expect(vi.mocked(logger.info).mock.calls).toEqual([
+    ['expire-entry task already exists, skipping', { entryId: 'entry-1' }],
+  ])
 })

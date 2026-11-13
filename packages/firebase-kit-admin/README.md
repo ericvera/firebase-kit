@@ -486,7 +486,9 @@ export const spaces = onCall<SpacesRequest, Promise<{ result: 'success' }>>(
 emulator it enqueues nothing, because the Cloud Tasks emulator ignores
 `scheduleTime` and would fire a delayed task the moment it is queued. A task id
 already scheduled is a duplicate of pending work, so it is logged and swallowed
-— which is what makes a repeated enqueue safe. Anything else throws.
+— which is what makes a repeated enqueue safe. Anything else throws. Both log
+lines are labeled by `data.action`; the deprecated `taskName` still takes
+precedence when passed.
 
 ```typescript
 // src/tasks/enqueueSpaceCleanup.ts
@@ -496,6 +498,7 @@ import { createTaskEnqueuer } from 'firebase-kit-admin/tasks'
 const enqueueTask = createTaskEnqueuer({ inEmulator })
 
 interface SpaceCleanupData {
+  action: 'space-cleanup'
   spaceId: string
 }
 
@@ -504,10 +507,9 @@ export const enqueueSpaceCleanup = (spaceId: string): Promise<void> =>
     queueName: 'space-cleanup',
     // Cloud Tasks rejects a second task with this id for about an hour.
     taskId: `space-cleanup-${spaceId}`,
-    data: { spaceId },
+    data: { action: 'space-cleanup', spaceId },
     delayMs: 60_000,
     dispatchDeadlineSeconds: 300,
-    taskName: 'space cleanup',
     logContext: { spaceId },
   })
 ```
@@ -750,7 +752,8 @@ from `process.env`) follow the same shape.
 
 - **`createTaskEnqueuer(dependencies)`**: Returns `enqueue(options)`.
 - **`EnqueueTaskOptions`**: `queueName`, `taskId`, `data`, `delayMs`,
-  `dispatchDeadlineSeconds`, `taskName`, `logContext`.
+  `dispatchDeadlineSeconds`, `logContext`, and the optional, deprecated
+  `taskName` (pass the label as `data.action` instead).
 - **`TaskEnqueuerDependencies`**: `inEmulator`.
 
 ### `firebase-kit-admin/testing`
