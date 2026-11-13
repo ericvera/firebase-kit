@@ -25,7 +25,7 @@ Every code task ran `yarn lint`, `yarn build` and `yarn test:unit`; `yarn test:e
 - `getDocumentsFromQuery`, `getDocuments` and the `DBSnapshot` type name are the planner's proposals; `getDBChangesDiff` and `expectNoDBChanges` are the owner's.
 - `expectNoDBChanges` takes no masks, and a rewrite with identical data counts as modified (the document's update time changed).
 - The consuming app must migrate before it can take this version: about 2,150 `getDBSnapshot` sites are unaffected, 661 diff sites and 411 `expectNoDBChanges` sites change their arguments, 13 sites read `.docs`, its `omitServerStamps` sites switch to masks, and seven `taskName` lines go. That work is outside this repo.
-- The owner's dependency update (dev dependencies and Yarn 4.18.1) is still uncommitted in the working tree and is not part of any task commit. It passed lint, build, unit and emulator tests before the amendments.
+- The owner’s dependency update (dev dependencies and Yarn 4.18.1) is committed on this branch as `c46864c`, so it ships inside the same squashed commit. Runtime and peer ranges are unchanged, and every test run since the update used it.
 - The spike is closed with no code.
 
 ## Left unfixed
