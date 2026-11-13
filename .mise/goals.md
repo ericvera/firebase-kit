@@ -378,19 +378,26 @@ for its token.
 
 ## Open questions
 
-Raised by critic round 1 (blocking), awaiting the owner's pick:
+Critic round 1 raised one blocking finding: task 4 reaches further than the
+owner approved, because a masked Timestamp counts as changed every time it is
+rewritten (the README masks `updated`). The owner's answer: they rarely mask
+timestamps, since the timestamp index already shows changes, so no special case
+for timestamps is needed — every masked field that changed shows as changed.
 
-1. Task 4 reaches further than the owner approved. The comparison runs on
-   normalized values, and a Timestamp is normalized before it is masked, so a
-   masked Timestamp counts as changed every time it is rewritten. The README's
-   own mask, `{ spaces: ['updated'] }`, is that case. Every snapshot of a
-   modified document that masks such a field would gain a `-` / `+` pair — likely
-   many of the ~309 consumer tests, not only the tests that overwrite a masked
-   id. Options: show changes for masked fields except timestamps; show them for
-   every masked field; make it an opt-in switch; drop the task.
-2. Task 4 adds `pretty-format` as a direct runtime dependency of the admin
-   package (already in the lockfile at the same version through jest-diff).
-   Accept it, or use a route with no new dependency.
+The owner then questioned the approach itself and proposed a per-field "version
+index" on the mask token, shown only when that field changed and stable from
+run to run even for randomly generated values. Awaiting the owner's pick:
+
+1. Task 4 approach: (i) the owner's version index — a changed masked field
+   gets distinct tokens on the before and after side, so plain jest-diff prints
+   the pair with no new dependency and no editing of printed text; (ii)
+   identical `"/String/"` lines through `diffLinesUnified2` and a new direct
+   `pretty-format` dependency (the planner's route); (iii) identical lines by
+   tagging the placeholders and stripping the tags from the printed text.
+2. If (i): the token format — `/String v1/` → `/String v2/`, or
+   `/String 0000/` → `/String 0001/` mirroring timestamps. The index is per
+   field (before and after), not global like the timestamp index, so the same
+   number on two fields would not mean the same value.
 
 Minor critic findings to pass to the planner with the answer: 01_02 cites line
 numbers past the end of `internal/DocumentChangeSnapshot.ts` (the method is at
