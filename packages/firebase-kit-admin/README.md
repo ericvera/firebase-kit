@@ -597,6 +597,35 @@ Factories for the in-memory mocks a vitest suite re-exports from its
 `__mocks__` modules, so that a bare `vi.mock('firebase-admin/app')` picks them up.
 Each is called once at module scope, so every importer shares one state.
 
+Those mocks only reach the code under test if vitest stops externalizing this
+package — the `import 'firebase-admin/app'` that has to resolve to the mocked
+copy is the one inside `firebase-kit-admin`, not the one in your own code. The
+same goes for `firebase-admin/functions`, `firebase-admin/auth` and
+`firebase-functions`. Inline it:
+
+```typescript
+// vitest.config.ts
+import { join } from 'node:path'
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    // `src` rather than the project directory, so the `__mocks__` folder vitest
+    // resolves relative to the root is the `src/__mocks__` one the test doubles
+    // below live in. Without it, a bare `vi.mock('firebase-admin/functions')`
+    // auto-mocks the real module instead, and every factory comes back
+    // `undefined`.
+    root: join(import.meta.dirname, 'src'),
+    server: { deps: { inline: ['firebase-kit-admin'] } },
+  },
+})
+```
+
+With the `inline` entry missing, the package's own imports leave vitest's module
+graph before the mock applies and resolve to the real modules: the enqueue
+function `createTaskEnqueuer` returns calls the real `getFunctions`, so the
+dedup path below is never exercised.
+
 ```typescript
 // src/__mocks__/firebase-admin/app/index.ts
 import { createFirebaseAdminAppMock } from 'firebase-kit-admin/mocks'
