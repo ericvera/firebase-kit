@@ -100,7 +100,7 @@ None. The mise config lists no Skills & guides entries.
      it('rejects taskName at compile time and labels from data.action', async () => {
        const enqueueTask = createTaskEnqueuer({ inEmulator: () => true })
 
-       // @ts-expect-error taskName was removed; data.action is the label
+       // @ts-expect-error taskName was removed, so data.action is the label
        await enqueueTask({ ...createOptions(), taskName: 'cleanup' })
 
        // Verify: a caller that slips taskName past the compiler still gets the

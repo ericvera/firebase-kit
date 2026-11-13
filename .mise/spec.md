@@ -3,7 +3,9 @@
 ## What
 
 Five changes to `packages/firebase-kit-admin` plus two README fixes, released as
-one `feat:` commit with no `BREAKING CHANGE:` footer.
+one commit carrying a `BREAKING CHANGE:` footer that names the removal of
+`EnqueueTaskOptions.taskName` (amendment 02_01), which bumps the major on all
+three packages.
 
 1. **`getDocumentsFromQuery(query, reader?)`** (`firebase-kit-admin/firestore`):
    runs a query, through the `TransactionReader` when one is given, and returns
@@ -36,7 +38,10 @@ one `feat:` commit with no `BREAKING CHANGE:` footer.
    IndexedDB fake). `firebase-kit-protocol` is not listed. Nothing is built for
    the spike.
 
-Out of scope: removing `taskName`; consumer call-site updates; any vitest preset
+Item 5 is superseded by amendment 02_01: `taskName` is removed from
+`EnqueueTaskOptions` and the log label is `data.action`, else `unnamed`.
+
+Out of scope: consumer call-site updates; any vitest preset
 or dependency injection for the spike.
 
 ## Design
@@ -182,7 +187,10 @@ mocks alongside `getsetdel` as reasons for inlining `firebase-kit-client`).
 
 ### What is removed
 
-Nothing. `taskName` removal is a later breaking release.
+`EnqueueTaskOptions.taskName` is removed in this release (amendment 02_01),
+along with its `@deprecated` JSDoc, the lint exception, its tests and every
+README mention. The release is breaking: the squashed commit carries a
+`BREAKING CHANGE:` footer naming the removal (major on all three packages).
 
 ## Hard-to-undo
 
@@ -198,8 +206,10 @@ Nothing. `taskName` removal is a later breaking release.
   every time they are rewritten (the admin README's own mask,
   `{ spaces: ['updated'] }`, is that case), and masked fields whose type
   changed. Every consumer inline snapshot covering such a document changes once.
-  Shipped as a regular feature, no `BREAKING CHANGE:` footer (owner decision,
-  re-confirmed with that reach in view).
+  This output change alone was approved to ship without a footer (owner
+  decision), but the release as a whole is breaking because of the
+  `taskName` removal below, so the squashed commit carries a
+  `BREAKING CHANGE:` footer.
 - Amendment 2026-11-13 (02_01): public API removal. `EnqueueTaskOptions.taskName`
   is deleted (superseding the optional/`@deprecated` item above); a caller that
   still passes it no longer compiles. The squashed commit must carry a
