@@ -375,3 +375,24 @@ for its token.
   `feat:` release, nothing breaking.
 - **Skips:** none. The run adds public exports across three areas of the admin
   package, so spec and critic both run.
+
+## Open questions
+
+Raised by critic round 1 (blocking), awaiting the owner's pick:
+
+1. Task 4 reaches further than the owner approved. The comparison runs on
+   normalized values, and a Timestamp is normalized before it is masked, so a
+   masked Timestamp counts as changed every time it is rewritten. The README's
+   own mask, `{ spaces: ['updated'] }`, is that case. Every snapshot of a
+   modified document that masks such a field would gain a `-` / `+` pair — likely
+   many of the ~309 consumer tests, not only the tests that overwrite a masked
+   id. Options: show changes for masked fields except timestamps; show them for
+   every masked field; make it an opt-in switch; drop the task.
+2. Task 4 adds `pretty-format` as a direct runtime dependency of the admin
+   package (already in the lockfile at the same version through jest-diff).
+   Accept it, or use a route with no new dependency.
+
+Minor critic findings to pass to the planner with the answer: 01_02 cites line
+numbers past the end of `internal/DocumentChangeSnapshot.ts` (the method is at
+:188-190, the module function at :16-33); 01_05 must state the `root` setting
+outright, because the admin README's mocks live under `src/__mocks__`.
