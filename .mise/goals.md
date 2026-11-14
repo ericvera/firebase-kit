@@ -30,7 +30,25 @@ All paths under `packages/firebase-kit-admin/src/testing/` unless noted.
 9. Hard to undo: `masks` is public API (`testing/index.ts:6`); the README documents masks as "per-collection field lists" at `packages/firebase-kit-admin/README.md:564-570`, API line at `:814` — both need updating. Under the CLAUDE.md release rule, changing what an existing mask string matches may need a `BREAKING CHANGE:` footer; a purely additive syntax publishes as a feat.
 10. Nothing in the description conflicts with the code.
 
-## Open questions
+## Decisions (owner)
 
-1. Path syntax for a nested mask entry.
-2. Whether a path may reach into array elements.
+- A mask entry addresses fields the way Firestore's `update()` addresses them. A string is a field path and is always split on dots, so `'quote.fees.topUpRetryStartedAt'` masks that one nested value.
+- The mask entry type reuses the existing Firestore type that lets a string match deep props (the dotted-key typing behind `update()`'s `UpdateData`), rather than a new hand-written path type. The owner said "perhaps", so this is a preference to honor where it fits, not a hard requirement.
+
+## Assumptions
+
+- Following `update()`: a path walks maps only and cannot reach into array elements; an array is a value and can be masked whole.
+- Following `update()`: a `FieldPath` entry is accepted alongside strings, and is the way to name a field whose name contains a literal `.`.
+- A path whose intermediate map is missing, or is not a map, is skipped silently, as a missing top-level field is today.
+- A nested masked value gets the same treatment as a top-level one: type token, `(before)`/`(after)` labels only when present on both sides and changed.
+- Masking never mutates the caller's documents, including nested maps.
+- A string mask that names a literal top-level field containing a `.` stops matching (it now needs a `FieldPath`). That is a change in what an existing mask matches, so the squashed commit carries a `BREAKING CHANGE:` footer and all three packages take the next major.
+- How the document type reaches the mask type (so the Firestore dotted-key type can be applied per collection) is left to the spec; if it cannot be done without widening the public signature, masks stay `string`-typed with the same runtime behavior.
+- README mask documentation and the API line are updated in the same change.
+- Out of scope: replacing the okven `maskTopUpRetryStartedAt` helper (another repo) and adding masks to `expectNoDBChanges`.
+
+## Proposal
+
+- Issue: `getDBChangesDiff` masks only match top-level fields, so one unstable nested value cannot be masked without hiding its whole parent map.
+- Approach: mask entries become Firestore `update()`-style field paths (dotted strings always split, `FieldPath` for literal dotted names, maps only), typed with Firestore's existing deep-key type where the document type is available; released with a `BREAKING CHANGE:` footer because a string mask for a literal dotted field name stops matching.
+- Skips: none — public API change, so spec and critic both run.
