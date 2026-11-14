@@ -30,6 +30,20 @@ All paths under `packages/firebase-kit-admin/src/testing/` unless noted.
 9. Hard to undo: `masks` is public API (`testing/index.ts:6`); the README documents masks as "per-collection field lists" at `packages/firebase-kit-admin/README.md:564-570`, API line at `:814` — both need updating. Under the CLAUDE.md release rule, changing what an existing mask string matches may need a `BREAKING CHANGE:` footer; a purely additive syntax publishes as a feat.
 10. Nothing in the description conflicts with the code.
 
+## Investigation: typed mask paths
+
+Verified by type-checking scratch files with tsc against the installed firebase-admin 14.5.1 (@google-cloud/firestore 9.4.1).
+
+1. The Firestore type is `UpdateData<T>`, exported from `firebase-admin/firestore` (`node_modules/firebase-admin/lib/firestore/index.d.ts:25`), defined at `node_modules/@google-cloud/firestore/types/firestore.d.ts:86-97`, nested keys built by `NestedUpdateFields`, `ChildUpdateFields`, `AddPrefixToKeys` (`:119-166`). `keyof UpdateData<Doc> & string` works as the mask entry type. The package already uses `UpdateData` in `packages/firebase-kit-admin/src/firestore/internal/TransactionWriter.ts:7,37`.
+2. Accepted: top-level keys; dotted nested keys, including through optional maps and `T | null` maps; a whole array (`'items'`); a key literally named `'a.b'`; any child of an index-signature map (`'byId.x'`, `firestore.d.ts:162-165`).
+3. Rejected: typos; array elements (`'items.0.sku'`, `'items.sku'`), because nesting only follows `Record<string, unknown>` (`:141-146`); the insides of a Timestamp (`'ts.seconds'`).
+4. Interfaces stop the nesting. A nested map typed as an `interface` adds no dotted keys, because an interface does not satisfy `Record<string, unknown>` (`:143`). The top-level document may still be an interface. This package's own test types are interfaces (`src/__test__/db/types.ts:9,22,38`). okven's path is all type aliases (`OrderQuote`, `OrderQuoteFees`, `DBOrder = MakeDB<Order>`), so `'quote.fees.topUpRetryStartedAt'` compiles there.
+5. `FieldPath` is never type checked: the class has no type parameter (`firestore.d.ts:3011-3018`) and `update()`'s field/value overload takes `string | FieldPath` and `any` (`:952-957`). Only the object form (`:927-931`) checks. Also: `keyof UpdateData<DocumentData>` accepts any string (index signature at `:39-41`), and a literal `'a.b'` key type-checks while runtime splitting treats it as nested.
+6. No collection-to-document type mapping exists. `TCollection` is a string union of collection names (`src/testing/getDBChangesDiff.ts:16-19`, `src/testing/internal/getDBChanges.ts:22-25,32`). `CollectionDataPoint` picks the document type per call (`src/firestore/internal/createCollectionDataPoint.ts:7-9`), `DBSnapshot.docs` is untyped (`src/testing/getDBSnapshot.ts:16-21`), and there is no converter.
+7. Signature change needed: the generic becomes a schema map, e.g. `TSchema extends Record<string, DocumentData>`, with masks typed `{ [C in keyof TSchema]?: (keyof UpdateData<TSchema[C]> & string)[] }`. The two `string[]` mask types at `internal/getDBChanges.ts:25` and `:32` change with it.
+8. Release: breaking. Callers passing an explicit collection type argument (`getDBChangesDiff<DBCollection>(...)`) stop compiling. In this repo those are only internal tests (`src/testing/internal/getDBChanges.test.ts:85,116,143,168,196,240,285,317,342`). Callers without a type argument: `src/testing/getDBChangesDiff.test.ts:68-69`, `README.md:591`, `src/firestore/internal/createRunBatch.emulator.test.ts:34,73`, `createRunTransaction.emulator.test.ts:42`. JSDoc at `getDBChangesDiff.ts:12-14` and README `:564-570`, `:814` describe the old typing and need rewriting.
+9. okven is still on the 5.x API (`getDBChangesDiff(getDBChanges(dataBefore, dataAfter))`), so it migrates to the new signature regardless.
+
 ## Decisions (owner)
 
 - A mask entry addresses fields the way Firestore's `update()` addresses them. A string is a field path and is always split on dots, so `'quote.fees.topUpRetryStartedAt'` masks that one nested value.
@@ -38,18 +52,16 @@ All paths under `packages/firebase-kit-admin/src/testing/` unless noted.
 ## Assumptions
 
 - Following `update()`: a path walks maps only and cannot reach into array elements; an array is a value and can be masked whole.
-- Following `update()`: a `FieldPath` entry is accepted alongside strings, and is the way to name a field whose name contains a literal `.`.
+- No `FieldPath` entries. Firestore never type checks a `FieldPath`, so accepting one would break the hard requirement. A field whose name contains a literal `.` cannot be masked on its own.
+- Nested maps typed as an `interface` produce no dotted keys, exactly as in `update()`. That is accepted as part of replicating Firestore; the README says so, and this package's own test document types change to type aliases where a nested mask test needs them.
 - A path whose intermediate map is missing, or is not a map, is skipped silently, as a missing top-level field is today.
 - A nested masked value gets the same treatment as a top-level one: type token, `(before)`/`(after)` labels only when present on both sides and changed.
 - Masking never mutates the caller's documents, including nested maps.
-- A string mask that names a literal top-level field containing a `.` stops matching (it now needs a `FieldPath`). That is a change in what an existing mask matches, so the squashed commit carries a `BREAKING CHANGE:` footer and all three packages take the next major.
+- The change is breaking (the type parameter changes from a collection-name union to a schema map, and a string mask for a literal dotted field name stops matching), so the squashed commit carries a `BREAKING CHANGE:` footer and all three packages take the next major.
 - README mask documentation and the API line are updated in the same change.
 - Out of scope: replacing the okven `maskTopUpRetryStartedAt` helper (another repo) and adding masks to `expectNoDBChanges`.
 
 ## Open questions
 
-To be answered by investigation before the proposal is rewritten (the owner called this critical):
-
-1. Which exported Firestore type validates `update()` field paths against a typed document (in the `firebase-admin/firestore` version this package's peer range allows), exactly what it accepts and rejects (dotted nested keys, optional fields, maps inside arrays, index signatures, `FieldPath`), and whether it can be reused as the mask entry type, for example as its keys.
-2. How `getDBChangesDiff` and its callers know, or could know, the document type of each collection today: what `TCollection` is, whether any collection-to-document-type mapping or converter exists in this package, and what in the public signature would have to change so each collection's mask list is checked against that collection's document type.
-3. What that signature change means for existing callers and for the release (additive or breaking).
+1. How a caller supplies each collection's document type.
+2. Whether masks may still be passed without document types.
