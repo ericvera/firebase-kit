@@ -19,17 +19,15 @@ import { normalizeData } from './normalizeData.js'
  *
  * Both snapshots' `docs` arrays are sorted in place.
  */
-export const getDBChanges = <TCollection extends string = string>(
+export const getDBChanges = (
   before: DBSnapshot,
   after: DBSnapshot,
-  masks?: Partial<Record<TCollection, string[]>>,
+  masks?: Partial<Record<string, readonly string[]>>,
 ): DBSnapshotChanges => {
   const beforeDocs = before.docs.sort(ascCompare((a) => a.updateTime.valueOf()))
   const afterDocs = after.docs.sort(ascCompare((a) => a.updateTime.valueOf()))
 
-  // Masks are keyed by plain string internally. The type parameter only narrows
-  // what a caller may name, so widening back here loses nothing.
-  const maskKeys = (masks as Record<string, string[]> | undefined) ?? {}
+  const maskKeys = masks ?? {}
 
   const result: DBSnapshotChanges = {
     added: [],

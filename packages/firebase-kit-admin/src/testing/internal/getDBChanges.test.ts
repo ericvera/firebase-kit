@@ -4,8 +4,6 @@ import { createDBSnapshot } from '../../__test__/utils/createDBSnapshot.js'
 import { createDocSnapshot } from '../../__test__/utils/createDocSnapshot.js'
 import { getDBChanges } from './getDBChanges.js'
 
-type Collection = 'entries' | 'spaces'
-
 const createEntry = (
   id: string,
   data: Record<string, unknown>,
@@ -82,7 +80,7 @@ it('applies masks per collection', () => {
     updateTimeMs: 1000,
   })
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([]),
     createDBSnapshot([entry, space]),
     {
@@ -113,7 +111,7 @@ it('labels a masked field that changed on a modified document', () => {
   const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
   const after = createEntry('entry-1', { name: 'Final', secret: 'b' }, 2000)
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([before]),
     createDBSnapshot([after]),
     {
@@ -140,7 +138,7 @@ it('shows a modified document whose only change is a masked field', () => {
   const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
   const after = createEntry('entry-1', { name: 'Draft', secret: 'b' }, 2000)
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([before]),
     createDBSnapshot([after]),
     {
@@ -165,7 +163,7 @@ it('keeps the plain token for an unchanged masked field on a modified document',
   const before = createEntry('entry-1', { name: 'Draft', secret: 'a' }, 1000)
   const after = createEntry('entry-1', { name: 'Final', secret: 'a' }, 2000)
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([before]),
     createDBSnapshot([after]),
     {
@@ -193,7 +191,7 @@ it('labels a masked timestamp that was rewritten', () => {
   )
   const after = createEntry('entry-1', { at: Timestamp.fromMillis(5000) }, 2000)
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([before]),
     createDBSnapshot([after]),
     {
@@ -237,7 +235,7 @@ it('prints the Timestamp token for a masked Timestamp', () => {
   )
   const added = createEntry('added', { at: Timestamp.fromMillis(1000) }, 3000)
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([unchangedBefore, changedBefore]),
     createDBSnapshot([unchangedAfter, changedAfter, added]),
     {
@@ -282,7 +280,7 @@ it('leaves masked timestamps out of the numbering', () => {
     2000,
   )
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([before]),
     createDBSnapshot([after]),
     {
@@ -314,7 +312,7 @@ it('leaves a Timestamp inside a masked map out of the numbering', () => {
     1000,
   )
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([]),
     createDBSnapshot([entry]),
     {
@@ -347,7 +345,7 @@ it('leaves a nested masked Timestamp out of the numbering', () => {
     1000,
   )
 
-  const changes = getDBChanges<Collection>(
+  const changes = getDBChanges(
     createDBSnapshot([]),
     createDBSnapshot([entry]),
     {
@@ -378,7 +376,7 @@ it("does not modify the documents' nested data", () => {
   const data = { meta }
   const entry = createEntry('entry-1', data, 1000)
 
-  getDBChanges<Collection>(createDBSnapshot([]), createDBSnapshot([entry]), {
+  getDBChanges(createDBSnapshot([]), createDBSnapshot([entry]), {
     entries: ['meta.at'],
   })
 
@@ -393,7 +391,7 @@ it("does not modify the documents' data", () => {
   const data = { at, name: 'entry' }
   const entry = createEntry('entry-1', data, 1000)
 
-  getDBChanges<Collection>(createDBSnapshot([]), createDBSnapshot([entry]), {
+  getDBChanges(createDBSnapshot([]), createDBSnapshot([entry]), {
     entries: ['at'],
   })
 

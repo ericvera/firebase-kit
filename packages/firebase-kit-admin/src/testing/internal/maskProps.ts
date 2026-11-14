@@ -46,7 +46,7 @@ export const getTypeToken = (
 export const maskProps = <T>(
   a: T,
   collection: string,
-  maskKeys: Record<string, string[]>,
+  maskKeys: Partial<Record<string, readonly string[]>>,
 ): T => {
   if (typeof a !== 'object' || Array.isArray(a) || a === null) {
     return a

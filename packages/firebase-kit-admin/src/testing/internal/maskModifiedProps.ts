@@ -16,7 +16,7 @@ export const maskModifiedProps = (
   before: unknown,
   after: unknown,
   collection: string,
-  maskKeys: Record<string, string[]>,
+  maskKeys: Partial<Record<string, readonly string[]>>,
 ): void => {
   if (!isMap(before) || !isMap(after)) {
     maskProps(before, collection, maskKeys)
