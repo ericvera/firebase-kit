@@ -76,6 +76,13 @@ A nested map typed as a named interface adds no dotted keys, exactly as with `up
   ```
 
 - Amendment 2026-11-14: a new README paragraph (`packages/firebase-kit-admin/README.md`, before the masks paragraph) documents numbered parents and path ordering.
+- Amendment 2026-11-14 (03_01), public behavior change in `firebase-kit-admin/testing`: `getDBChangesDiff` rejects instead of returning an empty diff when no document was added, removed or modified, so a consumer test that recorded an empty diff fails and must call `expectNoDBChanges`. Task 03_01's commit carries a third single-line footer, and the pull request description repeats it verbatim beside the other two, each as its own paragraph, taken from the branch with `git log --format=%B main..HEAD | grep '^BREAKING CHANGE:'`:
+
+  ```text
+  BREAKING CHANGE: getDBChangesDiff now throws when no document was added, removed or modified instead of returning an empty diff, so a test that diffs an unchanged database must call expectNoDBChanges instead.
+  ```
+
+- Amendment 2026-11-14 (03_01): the README testing paragraph and API line for `getDBChangesDiff` say it throws when nothing changed.
 
 ## Task index
 
@@ -88,7 +95,9 @@ A nested map typed as a named interface adds no dotted keys, exactly as with `up
 | `02_03_doc_numbering_helpers.md` | Check and commit the pure helpers that number documents among siblings and build path segments | `internal/compareCodeUnits.ts`, `internal/getCollectionPatterns.ts`, `internal/getDocNumbers.ts`, `internal/getParentPatterns.ts`, `internal/getDocPathSegments.ts` (all new) |
 | `02_04_number_parents_in_paths.md` | Check and commit numbered parents in diff paths, replacing the content hash | `internal/formatDocPath.ts` (new), `internal/DocumentChangeSnapshot.ts`, `internal/getDBChanges.ts` |
 | `02_05_sort_sections_by_path.md` | Check and commit path-before-kind section order, README and JSDoc, with the snapshot re-record `BREAKING CHANGE:` footer | `internal/compareDocPaths.ts` (new), `internal/formatDBChanges.ts`, `packages/firebase-kit-admin/src/testing/getDBChangesDiff.ts`, `packages/firebase-kit-admin/README.md` |
+| `03_01_throw_on_empty_diff.md` | `getDBChangesDiff` throws, pointing at `expectNoDBChanges`, when nothing was added, removed or modified, the empty-database type-check test diffs a change instead, README and JSDoc updated, with a third `BREAKING CHANGE:` footer | `packages/firebase-kit-admin/src/testing/getDBChangesDiff.ts`, `packages/firebase-kit-admin/README.md` |
 
 ## Amendments
 
 - 2026-11-14 `getDBChangesDiff` output changes. A subcollection document's parent prints as its number among its siblings instead of a content hash, a collection's documents print their number in their own sections when the diff holds documents from one of its subcollections, sections sort by path before kind, and `maskPath.ts` is split into one file per function. The work is already in the working tree, uncommitted, and the task is to check and commit it — the parent hash changed on any edit to the parent and reordered sections, and files in this repo hold one main export — tasks: 02_01, 02_02, 02_03, 02_04, 02_05
+- 2026-11-14 `getDBChangesDiff` throws when no document was added, removed or modified, with a message pointing at `expectNoDBChanges`, which stays as it is — a `vitest -u` run can then never record an empty diff, and there is one way to assert that nothing changed — tasks: 03_01
