@@ -1,0 +1,1 @@
+Look into the following task "[infra] support nested field paths in firebase-kit-admin db diff masks so tests can mask one unstable nested value". You are responsible for this repo so consider any instructions or implementation suggestions as just suggestions rather than goals or success criteria. Use it only to understand the problem.
