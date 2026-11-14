@@ -10,7 +10,7 @@
 - Masking never mutates the caller's documents, nested maps included.
 - Every mask entry is type checked against its collection's document type with Firestore's own `UpdateData<T>`, so a mistyped path fails to compile. Document types come from a schema type argument on each call: `getDBChangesDiff<DBSchema>(before, { orders: ['quote.fees.topUpRetryStartedAt'] })`, where `DBSchema` maps each collection name to its document type.
 - Passing masks without a schema type argument does not compile. Calling without masks still needs no type argument.
-- Ships as a major (owner decision). Task 01_02's commit carries a `BREAKING CHANGE:` footer naming the three breaks. The repository squashes with `COMMIT_MESSAGES`, so that footer lands in the squash commit and drives the release computation.
+- Ships as a major (owner decision). Task 01_02's commit carries a `BREAKING CHANGE:` footer naming the three breaks. The repository squashes with `COMMIT_MESSAGES`, so that footer lands in the default squash message, and the pull request description repeats it verbatim so a hand-edited squash message keeps it (see `## Hard-to-undo`).
 
 Out of scope: `FieldPath` entries, masks on `expectNoDBChanges`, the okven helper replacement.
 
@@ -53,15 +53,25 @@ The internal `getDBChanges` (`internal/getDBChanges.ts`) loses its `TCollection`
 
 Removed in 01_02: the `TCollection` type parameter on `getDBChangesDiff` and on internal `getDBChanges`, and the JSDoc sentence about keying by a collection enum. Callers with `getDBChangesDiff<DBCollection>(...)` stop compiling, which is the breaking change.
 
-Interfaces as nested map types add no dotted keys, exactly as with `update()`. The README says so. This package's tests use local type-alias document types for nested-mask type tests; `src/__test__/db/types.ts` is not changed.
+A nested map typed as a named interface adds no dotted keys, exactly as with `update()`. The repo lint rule `@typescript-eslint/consistent-type-definitions` (default `interface` option) rejects `type X = {...}` aliases, so documents and schemas are declared as `interface`s with each nested map written as an inline object type literal on its property (`interface Space { meta: { at: Timestamp; keep: string } | null }`), never as a named interface. This package's nested-mask type tests declare local document types that way, and the README gives consumers the same advice. `src/__test__/db/types.ts` is not changed.
 
 ### Docs (task 01_02)
 
-`packages/firebase-kit-admin/README.md`: the masks paragraph (`:564-570`) describes dotted `update()`-style paths, the schema type argument, the interface caveat, and that a field whose name contains a literal `.` cannot be masked on its own. The `renameSpace.emulator.test.ts` example (`:574-609`) passes a schema type argument. The API line (`:814`) shows `getDBChangesDiff<TSchema>(before, masks?)` and mentions `DBMasks`. No dependency versions restated.
+`packages/firebase-kit-admin/README.md`: the masks paragraph (`:564-570`) describes dotted `update()`-style paths, the schema type argument, the interface caveat with the advice to declare nested maps as inline object type literals on an interface property rather than as named interfaces, and that a field whose name contains a literal `.` cannot be masked on its own. The `renameSpace.emulator.test.ts` example (`:574-609`) passes a schema type argument. The API line (`:814`) shows `getDBChangesDiff<TSchema>(before, masks?)` and mentions `DBMasks`. No dependency versions restated.
 
 ## Hard-to-undo
 
-- Public API change in `firebase-kit-admin/testing`: `getDBChangesDiff`'s type parameter changes from a collection-name union to a schema map, masks without a schema stop compiling, a dotted mask string now addresses a nested field instead of a literal dotted top-level field, and a new exported type `DBMasks` is added. Released as a major. Task 01_02's commit carries the `BREAKING CHANGE:` footer (the squash body joins branch commit messages, so it reaches the release computation), and all three packages take the next major.
+- Public API change in `firebase-kit-admin/testing`: `getDBChangesDiff`'s type parameter changes from a collection-name union to a schema map, masks without a schema stop compiling, a dotted mask string now addresses a nested field instead of a literal dotted top-level field, and a new exported type `DBMasks` is added. Released as a major, and all three packages take the next major. Task 01_02's commit carries the `BREAKING CHANGE:` footer below (the default squash body joins branch commit messages). Earlier squash commits on main (`cc759b5`, `cf90d38`) have hand-written bodies, so the merger may rewrite the squash message. The pull request description must repeat this footer text verbatim, as its own final paragraph, so whoever writes the squash message keeps it:
+
+  ```text
+  BREAKING CHANGE: getDBChangesDiff in firebase-kit-admin/testing changes its
+  masks API. The type parameter is now a schema map from collection name to
+  document type instead of a collection-name union, so
+  getDBChangesDiff<DBCollection>(...) no longer compiles. Passing masks without
+  a schema type argument no longer compiles. A dotted mask string such as
+  'a.b' now addresses the nested field b inside map a instead of a top-level
+  field literally named 'a.b'.
+  ```
 - README public documentation of the masks API (`packages/firebase-kit-admin/README.md`) is rewritten.
 
 ## Task index
