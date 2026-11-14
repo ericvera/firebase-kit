@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { Timestamp } from 'firebase-admin/firestore'
-import { readPath, writePath } from './maskPath.js'
+import { readPath } from './readPath.js'
+import { writePath } from './writePath.js'
 
 const getTypeName = (value: unknown): string => {
   if (value instanceof Timestamp) {

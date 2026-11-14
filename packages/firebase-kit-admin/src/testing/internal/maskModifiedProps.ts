@@ -1,6 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
-import { isMap, readPath, writePath } from './maskPath.js'
+import { isMap } from './isMap.js'
 import { getTypeToken, maskProps } from './maskProps.js'
+import { readPath } from './readPath.js'
+import { writePath } from './writePath.js'
 
 /**
  * Masks both sides of a modified document in place. A masked field whose value
