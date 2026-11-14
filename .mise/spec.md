@@ -61,17 +61,13 @@ A nested map typed as a named interface adds no dotted keys, exactly as with `up
 
 ## Hard-to-undo
 
-- Public API change in `firebase-kit-admin/testing`: `getDBChangesDiff`'s type parameter changes from a collection-name union to a schema map, masks without a schema stop compiling, a dotted mask string now addresses a nested field instead of a literal dotted top-level field, and a new exported type `DBMasks` is added. Released as a major, and all three packages take the next major. Task 01_02's commit carries the `BREAKING CHANGE:` footer below (the default squash body joins branch commit messages). Earlier squash commits on main (`cc759b5`, `cf90d38`) have hand-written bodies, so the merger may rewrite the squash message. The pull request description must repeat this footer text verbatim, as its own final paragraph, so whoever writes the squash message keeps it:
+- Public API change in `firebase-kit-admin/testing`: `getDBChangesDiff`'s type parameter changes from a collection-name union to a schema map, masks without a schema stop compiling, a dotted mask string now addresses a nested field instead of a literal dotted top-level field, and a new exported type `DBMasks` is added. Released as a major, and all three packages take the next major. Task 01_02's commit carries the `BREAKING CHANGE:` footer below (the default squash body joins branch commit messages). Earlier squash commits on main (`cc759b5`, `cf90d38`) have hand-written bodies, so the merger may rewrite the squash message. The pull request description must repeat this footer text verbatim, as its own final paragraph, so whoever writes the squash message keeps it. The footer is a single line, as in earlier majors (`git log -1 --format=%B cc759b5`), because text follows it in the squash body (the `Co-Authored-By:` trailer and later commit messages) and a multi-line footer would pull that text into the release note:
 
   ```text
-  BREAKING CHANGE: getDBChangesDiff in firebase-kit-admin/testing changes its
-  masks API. The type parameter is now a schema map from collection name to
-  document type instead of a collection-name union, so
-  getDBChangesDiff<DBCollection>(...) no longer compiles. Passing masks without
-  a schema type argument no longer compiles. A dotted mask string such as
-  'a.b' now addresses the nested field b inside map a instead of a top-level
-  field literally named 'a.b'.
+  BREAKING CHANGE: getDBChangesDiff in firebase-kit-admin/testing now takes a schema map type argument instead of a collection-name union, masks passed without a schema type argument no longer compile, and a dotted mask string such as 'a.b' now addresses nested field b inside map a instead of a top-level field named 'a.b'.
   ```
+
+  The pull request is opened after the close step has removed `.mise/`, so this spec is gone by then. Whoever writes the pull request description takes the footer verbatim from the body of the `Task 01_02` commit on the branch, found with `git log --grep='^Task 01_02' --format=%B` (or `git log --format=%B` on the branch), not from this file.
 - README public documentation of the masks API (`packages/firebase-kit-admin/README.md`) is rewritten.
 
 ## Task index
