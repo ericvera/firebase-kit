@@ -9,6 +9,9 @@ import {
   UnmodifiedDocumentSnapshot,
 } from './DocumentChangeSnapshot.js'
 import { extractTimestamps } from './extractTimestamps.js'
+import { getDocNumbers } from './getDocNumbers.js'
+import { getDocPathSegments } from './getDocPathSegments.js'
+import { getParentPatterns } from './getParentPatterns.js'
 import { maskModifiedProps } from './maskModifiedProps.js'
 import { maskProps } from './maskProps.js'
 import { normalizeData } from './normalizeData.js'
@@ -80,8 +83,40 @@ export const getDBChanges = (
   const normalize = (data: Record<string, unknown>) =>
     normalizeData(data, sortedTimestamps)
 
-  // Step 3: Classify each document by presence and updateTime
-  pairs.forEach(({ afterEntry, beforeEntry }) => {
+  // Step 3: Number every document among its siblings. A document that existed
+  // before the test is ranked by what it held then, so nothing the code under
+  // test writes to it can renumber it.
+  const numbers = getDocNumbers([
+    ...beforeDocs.map((doc) => ({
+      path: doc.ref.path,
+      existedBefore: true,
+      content: normalize(
+        maskProps({ ...doc.data() }, doc.ref.parent.id, maskKeys),
+      ),
+    })),
+    ...pairs
+      .filter(({ beforeEntry }) => !beforeEntry)
+      .map(({ afterEntry }) => ({
+        path: afterEntry.doc.ref.path,
+        existedBefore: false,
+        content: normalize(afterEntry.data),
+      })),
+  ])
+
+  // Step 4: Classify each document by presence and updateTime
+  const isChanged = ({ afterEntry, beforeEntry }: (typeof pairs)[number]) =>
+    !beforeEntry?.doc.updateTime.isEqual(afterEntry.doc.updateTime)
+
+  const parentPatterns = getParentPatterns([
+    ...pairs.filter(isChanged).map(({ afterEntry }) => afterEntry.doc.ref.path),
+    ...removedEntries.map(({ doc }) => doc.ref.path),
+  ])
+
+  const toPathSegments = (doc: QueryDocumentSnapshot) =>
+    getDocPathSegments(doc.ref.path, numbers, parentPatterns)
+
+  pairs.forEach((pair) => {
+    const { afterEntry, beforeEntry } = pair
     const afterDoc = afterEntry.doc
 
     if (!beforeEntry) {
@@ -89,7 +124,7 @@ export const getDBChanges = (
         new AddedDocumentSnapshot(
           afterDoc,
           normalize(afterEntry.data),
-          afterDocs,
+          toPathSegments(afterDoc),
         ),
       )
       return
@@ -97,26 +132,26 @@ export const getDBChanges = (
 
     const beforeDoc = beforeEntry.doc
 
-    if (!beforeDoc.updateTime.isEqual(afterDoc.updateTime)) {
+    if (isChanged(pair)) {
       result.modified.push(
         new ModifiedDocumentSnapshot(
           beforeDoc,
           afterDoc,
           normalize(beforeEntry.data),
           normalize(afterEntry.data),
-          afterDocs,
+          toPathSegments(afterDoc),
         ),
       )
     } else {
       result.unmodified.push(
-        new UnmodifiedDocumentSnapshot(beforeDoc, afterDocs),
+        new UnmodifiedDocumentSnapshot(beforeDoc, toPathSegments(beforeDoc)),
       )
     }
   })
 
   removedEntries.forEach(({ doc, data }) => {
     result.removed.push(
-      new RemovedDocumentSnapshot(doc, normalize(data), beforeDocs),
+      new RemovedDocumentSnapshot(doc, normalize(data), toPathSegments(doc)),
     )
   })
 

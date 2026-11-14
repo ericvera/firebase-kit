@@ -6,16 +6,23 @@ import {
   RemovedDocumentSnapshot,
   UnmodifiedDocumentSnapshot,
 } from './DocumentChangeSnapshot.js'
+import type { DocPathSegment } from './getDocPathSegments.js'
 
 const createEntry = (id: string, data: Record<string, unknown>) =>
   createDocSnapshot({ path: `entries/${id}`, data })
 
+const EntryPath: DocPathSegment[] = [
+  { collection: 'entries', number: undefined },
+]
+
 it('renders an added document as an addition against nothing', () => {
   const doc = createEntry('entry-1', { name: 'first' })
 
-  const snapshot = new AddedDocumentSnapshot(doc, { name: 'first', count: 2 }, [
+  const snapshot = new AddedDocumentSnapshot(
     doc,
-  ])
+    { name: 'first', count: 2 },
+    EntryPath,
+  )
 
   // Verify: the whole normalized document shows up as added, which is what the
   // printable diff strips its first line from
@@ -31,7 +38,7 @@ it('renders an added document as an addition against nothing', () => {
 it('exposes the document it was built from', () => {
   const doc = createEntry('entry-1', { name: 'first' })
 
-  const snapshot = new AddedDocumentSnapshot(doc, { name: 'first' }, [doc])
+  const snapshot = new AddedDocumentSnapshot(doc, { name: 'first' }, EntryPath)
 
   expect(snapshot.addedDoc).toBe(doc)
 })
@@ -42,7 +49,7 @@ it('renders a removed document as a deletion of everything it held', () => {
   const snapshot = new RemovedDocumentSnapshot(
     doc,
     { name: 'first', count: 2 },
-    [doc],
+    EntryPath,
   )
 
   expect(snapshot.getDiff()).toMatchInlineSnapshot(`
@@ -63,7 +70,7 @@ it('renders only the changed properties of a modified document', () => {
     afterDoc,
     { name: 'first', count: 2 },
     { name: 'second', count: 2 },
-    [afterDoc],
+    EntryPath,
   )
 
   // Verify: unchanged properties are elided, so the diff stays readable on a
@@ -88,7 +95,7 @@ it('returns no diff for a modified document whose normalized data matches', () =
     afterDoc,
     { name: 'first' },
     { name: 'first' },
-    [afterDoc],
+    EntryPath,
   )
 
   // Verify: equal data yields "no visual difference", which is reported as no
@@ -99,100 +106,25 @@ it('returns no diff for a modified document whose normalized data matches', () =
 it('returns no diff for an unmodified document', () => {
   const doc = createEntry('entry-1', { name: 'first' })
 
-  const snapshot = new UnmodifiedDocumentSnapshot(doc, [doc])
+  const snapshot = new UnmodifiedDocumentSnapshot(doc, EntryPath)
 
   expect(snapshot.getDiff()).toBeUndefined()
 })
 
-it('replaces the document id in the normalized path', () => {
-  const doc = createEntry('entry-1', { name: 'first' })
-
-  const snapshot = new UnmodifiedDocumentSnapshot(doc, [doc])
-
-  // Verify: the generated id is dropped, so a snapshot survives a rerun that
-  // assigns different ids
-  expect(snapshot.normalizedPath).toEqual('entries/[ID]')
-})
-
-it('replaces a subcollection parent id with a hash of the parent document', () => {
-  const parentDoc = createDocSnapshot({
-    path: 'spaces/space-1',
-    data: { name: 'space one' },
-  })
-  const childDoc = createDocSnapshot({
+it('prints the path segments it was given', () => {
+  const doc = createDocSnapshot({
     path: 'spaces/space-1/entries/entry-1',
     data: { name: 'first' },
   })
+  const pathSegments: DocPathSegment[] = [
+    { collection: 'spaces', number: 1 },
+    { collection: 'entries', number: undefined },
+  ]
 
-  const snapshot = new UnmodifiedDocumentSnapshot(childDoc, [
-    parentDoc,
-    childDoc,
-  ])
+  const snapshot = new UnmodifiedDocumentSnapshot(doc, pathSegments)
 
-  // Verify: the parent id is replaced by a value derived from the parent's
-  // content, so two runs that write the same parent produce the same path
-  expect(snapshot.normalizedPath).toMatchInlineSnapshot(
-    `"spaces/asbh2OkU2iqwHWY9iJGtlwaa/entries/[ID]"`,
-  )
-})
-
-it('throws when a subcollection parent is missing from the snapshot', () => {
-  const childDoc = createDocSnapshot({
-    path: 'spaces/space-1/entries/entry-1',
-    data: { name: 'first' },
-  })
-
-  // Verify: the parent has to be part of the same snapshot, otherwise its id
-  // cannot be normalized
-  expect(
-    () => new UnmodifiedDocumentSnapshot(childDoc, [childDoc]),
-  ).toThrowErrorMatchingInlineSnapshot(
-    `[Error: Document not found for path: spaces/space-1 (an ancestor of spaces/space-1/entries/entry-1). Add a ref or query covering the spaces collection to getDBSnapshot, so the ancestor is in the snapshot.]`,
-  )
-})
-
-it('replaces every ancestor id with a hash of that ancestor document', () => {
-  const spaceDoc = createDocSnapshot({
-    path: 'spaces/space-1',
-    data: { name: 'space one' },
-  })
-  const entryDoc = createDocSnapshot({
-    path: 'spaces/space-1/entries/entry-1',
-    data: { name: 'first' },
-  })
-  const commentDoc = createDocSnapshot({
-    path: 'spaces/space-1/entries/entry-1/comments/comment-1',
-    data: { text: 'hi' },
-  })
-
-  const snapshot = new UnmodifiedDocumentSnapshot(commentDoc, [
-    spaceDoc,
-    entryDoc,
-    commentDoc,
-  ])
-
-  // Verify: each ancestor id is derived from that ancestor's own content, at
-  // any depth
-  expect(snapshot.normalizedPath).toMatchInlineSnapshot(
-    `"spaces/asbh2OkU2iqwHWY9iJGtlwaa/entries/ohLlfsbXahIoRohUudbLTAaa/comments/[ID]"`,
-  )
-})
-
-it('throws naming the missing ancestor at any depth', () => {
-  const spaceDoc = createDocSnapshot({
-    path: 'spaces/space-1',
-    data: { name: 'space one' },
-  })
-  const commentDoc = createDocSnapshot({
-    path: 'spaces/space-1/entries/entry-1/comments/comment-1',
-    data: { text: 'hi' },
-  })
-
-  // Verify: the error names the missing ancestor and the collection to add to
-  // the snapshot
-  expect(
-    () => new UnmodifiedDocumentSnapshot(commentDoc, [spaceDoc, commentDoc]),
-  ).toThrowErrorMatchingInlineSnapshot(
-    `[Error: Document not found for path: spaces/space-1/entries/entry-1 (an ancestor of spaces/space-1/entries/entry-1/comments/comment-1). Add a ref or query covering the spaces/space-1/entries collection to getDBSnapshot, so the ancestor is in the snapshot.]`,
-  )
+  // Verify: the generated ids are gone, so a snapshot survives a rerun that
+  // assigns different ones, and the segments stay available for sorting
+  expect(snapshot.normalizedPath).toBe('spaces/[ID 1]/entries/[ID]')
+  expect(snapshot.pathSegments).toBe(pathSegments)
 })

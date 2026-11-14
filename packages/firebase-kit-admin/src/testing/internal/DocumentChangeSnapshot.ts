@@ -1,8 +1,7 @@
 import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import { diff } from 'jest-diff'
-import { createHash } from 'node:crypto'
-import { extractTimestamps } from './extractTimestamps.js'
-import { normalizeData } from './normalizeData.js'
+import { formatDocPath } from './formatDocPath.js'
+import type { DocPathSegment } from './getDocPathSegments.js'
 
 export interface DBSnapshotChanges {
   added: AddedDocumentSnapshot[]
@@ -32,85 +31,16 @@ const getDiff = (a: unknown, b: unknown): string | undefined => {
   return text?.toString()
 }
 
-const generateHash = (data: unknown): string => {
-  const hashData = JSON.stringify(data)
-  return createHash('md5')
-    .update(hashData)
-    .digest('base64')
-    .replaceAll(/[/\\+=]/g, 'a')
-}
-
-/**
- * Creates a normalized ID for a document path based on the content of the
- * document whose path is received (e.g. an ancestor of a subcollection item at
- * `childPath`).
- */
-const getNormalizedIDForPath = (
-  path: string,
-  childPath: string,
-  docs: QueryDocumentSnapshot[],
-): string => {
-  const doc = docs.find((d) => d.ref.path === path)
-
-  if (!doc) {
-    const collectionPath = path.split('/').slice(0, -1).join('/')
-    throw new Error(
-      `Document not found for path: ${path} (an ancestor of ${childPath}). Add a ref or query covering the ${collectionPath} collection to getDBSnapshot, so the ancestor is in the snapshot.`,
-    )
-  }
-
-  const currentData = doc.data()
-
-  // NOTE: This will only normalize the timestamps within the current document.
-  // and not across all documents. So if there is a single timestamp it will
-  // just be normalized to /Timestamp 0000/ rather than a timestamp matching
-  // across the snapshot.
-
-  // Extract and sort timestamps from this document
-  const timestampValues = extractTimestamps(currentData)
-  const sortedTimestamps = Array.from(timestampValues).sort()
-
-  // Replace timestamps and buffers with normalized values
-  const normalizedData = normalizeData(currentData, sortedTimestamps)
-
-  return generateHash(normalizedData)
-}
-
-/**
- * Returns a normalized path for a document, replacing the last segment with
- * '[ID]' and every ancestor document id with a hash of that ancestor's
- * content. Every ancestor document must be in `allDocs`.
- */
-const getDocPath = (
-  doc: QueryDocumentSnapshot,
-  allDocs: QueryDocumentSnapshot[],
-): string => {
-  const segments = doc.ref.path.split('/')
-  const output = [...segments]
-
-  for (let i = 1; i < segments.length - 1; i += 2) {
-    output[i] = getNormalizedIDForPath(
-      segments.slice(0, i + 1).join('/'),
-      doc.ref.path,
-      allDocs,
-    )
-  }
-
-  output[output.length - 1] = '[ID]'
-
-  return output.join('/')
-}
-
 // Proposed base class
 abstract class BaseDocumentSnapshot {
   public readonly normalizedPath: string
 
   constructor(
     protected readonly doc: QueryDocumentSnapshot,
-    allDocs: QueryDocumentSnapshot[],
+    public readonly pathSegments: readonly DocPathSegment[],
     protected readonly normalizedData?: unknown,
   ) {
-    this.normalizedPath = getDocPath(doc, allDocs)
+    this.normalizedPath = formatDocPath(pathSegments)
   }
 
   abstract getDiff(): string | undefined
@@ -124,9 +54,9 @@ export class AddedDocumentSnapshot extends BaseDocumentSnapshot {
   constructor(
     addedDoc: QueryDocumentSnapshot,
     normalizedAddedData: unknown,
-    allDocs: QueryDocumentSnapshot[],
+    pathSegments: readonly DocPathSegment[],
   ) {
-    super(addedDoc, allDocs, normalizedAddedData)
+    super(addedDoc, pathSegments, normalizedAddedData)
     this.addedDoc = addedDoc
     this.normalizedAddedData = normalizedAddedData
   }
@@ -147,9 +77,9 @@ export class RemovedDocumentSnapshot extends BaseDocumentSnapshot {
   constructor(
     removedDoc: QueryDocumentSnapshot,
     normalizedRemovedData: unknown,
-    allDocs: QueryDocumentSnapshot[],
+    pathSegments: readonly DocPathSegment[],
   ) {
-    super(removedDoc, allDocs, normalizedRemovedData)
+    super(removedDoc, pathSegments, normalizedRemovedData)
     this.normalizedRemovedData = normalizedRemovedData
   }
 
@@ -175,9 +105,9 @@ export class ModifiedDocumentSnapshot extends BaseDocumentSnapshot {
     afterDoc: QueryDocumentSnapshot,
     normalizeBeforeData: unknown,
     normalizeAfterData: unknown,
-    allDocs: QueryDocumentSnapshot[],
+    pathSegments: readonly DocPathSegment[],
   ) {
-    super(afterDoc, allDocs, normalizeAfterData)
+    super(afterDoc, pathSegments, normalizeAfterData)
     this.beforeDoc = beforeDoc
     this.afterDoc = afterDoc
 
