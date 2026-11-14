@@ -2,7 +2,7 @@
 
 ## Goal
 
-Commit the last of the amendment's work: `getDBChangesDiff` sections sort by path first and kind second, so a parent's section sits directly above its children's. Commit the README paragraph and JSDoc that describe numbered parents and the new order. The commit body carries a second `BREAKING CHANGE:` footer saying snapshots must be re-recorded. The code and docs are already in the working tree, uncommitted. This task checks and commits them, it does not rewrite them. After this task nothing under `packages/` is left uncommitted.
+Commit the last of the amendment's work: `getDBChangesDiff` sections sort by path first and kind second, so a parent's section sits directly above its children's. Commit the README paragraph and JSDoc that describe numbered parents and the new order. The commit body carries a second `BREAKING CHANGE:` footer saying snapshots must be re-recorded. The code and docs are already in the working tree, uncommitted. This task checks and commits them, it does not rewrite them beyond the prose fixes in Implementation details step 2. After this task nothing under `packages/` is left uncommitted.
 
 ## Files to modify/create
 
@@ -30,7 +30,9 @@ none (the mise config has no Skills & guides entries)
 ## Implementation details
 
 1. Read the working-tree diffs against the description above.
-2. README checks (CLAUDE.md `## Documentation conventions`): no dependency version restated, no install block added. Confirm the paragraph matches the code. Parents are ranked by pre-test content, pre-existing documents come first, identical siblings share a number (the paragraph starting at `packages/firebase-kit-admin/README.md:564` and the `getDBChangesDiff` JSDoc do not say this yet; add that sentence to both), numbers show in the parent collection's own sections only when the diff holds a changed subcollection document, and sections sort by path.
+2. README checks (CLAUDE.md `## Documentation conventions`): no dependency version restated, no install block added. Confirm the paragraph matches the code. Parents are ranked by pre-test content, pre-existing documents come first, identical siblings share a number, numbers show in the parent collection's own sections only when the diff holds a changed subcollection document, and sections sort by path. Make these prose fixes:
+   - README (the paragraph starting at `packages/firebase-kit-admin/README.md:564`): it already says parents are ranked by pre-test content and that created documents come after pre-existing ones (`README.md:568-570`). Add only a clause saying identical siblings share a number. Also change "rank among the documents of its collection" (`README.md:567`) to "rank among the documents of its collection in the snapshot", because the code ranks only the snapshot's before documents plus the added ones, so a narrower `getDBSnapshot` query numbers differently.
+   - `getDBChangesDiff` JSDoc in `packages/firebase-kit-admin/src/testing/getDBChangesDiff.ts`: it says none of the three points. Add all three: parents are ranked by what they held before the test, documents the test creates are numbered after the pre-existing ones, and identical siblings share a number.
 3. Run the checklist (`.claude/mise-checklist.md`), rule 7 especially over the README paragraph and JSDoc. Fix only failures.
 4. Stage exactly these seven files. Confirm `git status --short packages` is empty afterwards apart from what you staged, then commit with this message (the footer is one line, followed by the attribution trailer):
 
