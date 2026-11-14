@@ -27,6 +27,10 @@ export type DBMasks<TSchema> = {
  * and identical siblings share a number. Sections are sorted by path, so a
  * document sits directly above the documents in its subcollections.
  *
+ * It throws when no document was added, removed or modified, so an empty diff
+ * can never be recorded as a snapshot. Assert that nothing changed with
+ * `expectNoDBChanges` instead.
+ *
  * `masks` hides per-collection fields whose values are not stable enough to
  * assert on. Each entry is a Firestore `update()`-style field path, always
  * split on dots, so `'quote.fees.at'` masks one nested value. `TSchema` maps
@@ -44,6 +48,17 @@ export const getDBChangesDiff = async <
   masks?: NoInfer<[TSchema] extends [never] ? undefined : DBMasks<TSchema>>,
 ): Promise<string> => {
   const after = await getDBSnapshot(before.refs)
+  const changes = getDBChanges(before, after, masks)
 
-  return formatDBChanges(getDBChanges(before, after, masks))
+  if (
+    changes.added.length === 0 &&
+    changes.removed.length === 0 &&
+    changes.modified.length === 0
+  ) {
+    throw new Error(
+      'getDBChangesDiff found no added, removed or modified documents. Use expectNoDBChanges(before) to assert that nothing changed.',
+    )
+  }
+
+  return formatDBChanges(changes)
 }

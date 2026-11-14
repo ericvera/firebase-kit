@@ -271,8 +271,48 @@ it('names a parent by number and lists its children under it', async () => {
   `)
 })
 
+it('throws pointing at expectNoDBChanges when nothing changed', async () => {
+  const { query } = createMutableQuery(beforeDocs())
+  const before = await getDBSnapshot(query)
+
+  await expect(
+    getDBChangesDiff(before),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(
+    `[Error: getDBChangesDiff found no added, removed or modified documents. Use expectNoDBChanges(before) to assert that nothing changed.]`,
+  )
+})
+
+it('throws when only data changed and updateTime did not', async () => {
+  const { state, query } = createMutableQuery([
+    createDocSnapshot({
+      path: 'spaces/space-1',
+      data: { name: 'Old' },
+      updateTimeMs: 1,
+    }),
+  ])
+  const before = await getDBSnapshot(query)
+  state.docs = [
+    createDocSnapshot({
+      path: 'spaces/space-1',
+      data: { name: 'New' },
+      updateTimeMs: 1,
+    }),
+  ]
+
+  await expect(getDBChangesDiff(before)).rejects.toThrow('expectNoDBChanges')
+})
+
+it('throws for an empty snapshot', async () => {
+  const { query } = createMutableQuery([])
+  const before = await getDBSnapshot(query)
+
+  await expect(getDBChangesDiff(before)).rejects.toThrow('expectNoDBChanges')
+})
+
 it('type checks mask paths against the schema', async () => {
-  const before = createDBSnapshot([])
+  const { state, query } = createMutableQuery(beforeDocs())
+  const before = await getDBSnapshot(query)
+  state.docs = afterDocs()
   const diffs = await Promise.all([
     getDBChangesDiff<Schema>(before, { spaces: ['meta.at', 'tags', 'at'] }),
     getDBChangesDiff(before),

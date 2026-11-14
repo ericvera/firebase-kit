@@ -560,6 +560,8 @@ re-reads those refs and returns the printable diff to pin with an inline
 snapshot. `expectNoDBChanges(before)` re-reads them too and fails, printing the
 diff, if any document was added, removed or modified. A rewrite with identical
 data counts as a modification, because the document's update time moved.
+`getDBChangesDiff` throws when no document was added, removed or modified, so
+`expectNoDBChanges` is the one way to assert that nothing changed.
 
 The diff has one section per changed document, headed by its path. Ids differ
 between runs, so a document's own id prints as `[ID]` and the parent of a
@@ -846,7 +848,8 @@ from `process.env`) follow the same shape.
 - **`getDBSnapshot(inputs)`**: Reads the refs or queries into a `DBSnapshot`
   (`{ docs, refs }`).
 - **`getDBChangesDiff<TSchema>(before, masks?)`**: Re-reads `before.refs` and
-  returns the printable diff since it. `masks` is a `DBMasks<TSchema>`.
+  returns the printable diff since it, and throws if nothing changed. `masks`
+  is a `DBMasks<TSchema>`.
 - **`expectNoDBChanges(before)`**: Re-reads `before.refs` and fails with the
   printed diff if any document was added, removed or modified.
 - **`normalizeData(data, options?)`**: Replaces Firestore Timestamps with
