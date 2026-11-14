@@ -58,7 +58,8 @@ Verified by type-checking scratch files with tsc against the installed firebase-
 
 - Following `update()`: a path walks maps only and cannot reach into array elements; an array is a value and can be masked whole.
 - No `FieldPath` entries. Firestore never type checks a `FieldPath`, so accepting one would break the hard requirement. A field whose name contains a literal `.` cannot be masked on its own.
-- Nested maps typed as an `interface` produce no dotted keys, exactly as in `update()`. That is accepted as part of replicating Firestore; the README says so, and this package's own test document types change to type aliases where a nested mask test needs them.
+- Nested maps typed as a named `interface` produce no dotted keys, exactly as in `update()`. That is accepted as part of replicating Firestore. The repo lint rule `@typescript-eslint/consistent-type-definitions` rejects `type X = {…}` aliases, so documents and schemas are declared as `interface`s with each nested map written as an inline object type literal on its property, never as a named interface. The README caveat gives consumers the same advice.
+- The pull request description repeats the `BREAKING CHANGE:` footer verbatim, so a hand-edited squash message keeps it.
 - A path whose intermediate map is missing, or is not a map, is skipped silently, as a missing top-level field is today.
 - A nested masked value gets the same treatment as a top-level one: type token, `(before)`/`(after)` labels only when present on both sides and changed.
 - Masking never mutates the caller's documents, including nested maps.
