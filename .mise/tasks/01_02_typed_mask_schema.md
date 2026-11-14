@@ -1,0 +1,93 @@
+# 01_02 Type-checked mask paths through a schema type argument
+
+## Goal
+
+Make every `getDBChangesDiff` mask entry type checked against its collection's document type with Firestore's own `UpdateData<T>`, supplied through a schema type argument: `getDBChangesDiff<DBSchema>(before, { orders: ['quote.fees.topUpRetryStartedAt'] })`. A mistyped path, an array-element path, an unknown collection, or masks passed without a schema fail to compile. Calls without masks keep compiling without a type argument. Update the README to match.
+
+## Files to modify/create
+
+1. `packages/firebase-kit-admin/src/testing/getDBChangesDiff.ts`
+2. `packages/firebase-kit-admin/src/testing/internal/getDBChanges.ts`
+3. `packages/firebase-kit-admin/src/testing/internal/maskProps.ts` (parameter type only)
+4. `packages/firebase-kit-admin/src/testing/internal/maskModifiedProps.ts` (parameter type only)
+5. `packages/firebase-kit-admin/README.md`
+
+Tests: `packages/firebase-kit-admin/src/testing/getDBChangesDiff.test.ts`, `packages/firebase-kit-admin/src/testing/internal/getDBChanges.test.ts`.
+
+## Background
+
+All source paths below are under `packages/firebase-kit-admin/src/testing/`.
+
+- Task 01_01 made masks runtime dotted paths: `internal/maskPath.ts` (`isMap`, `readPath`, `writePath`) is used by `maskProps` (`internal/maskProps.ts`) and `maskModifiedProps` (`internal/maskModifiedProps.ts`). Both still take `maskKeys: Record<string, string[]>`.
+- `getDBChangesDiff.ts:16-23` today: `<TCollection extends string = string>(before: DBSnapshot, masks?: Partial<Record<TCollection, string[]>>)`. JSDoc at `:12-14` describes keying by a collection enum.
+- `internal/getDBChanges.ts:22-32` has the same `TCollection` generic and casts masks to `Record<string, string[]>` at `:32`.
+- Explicit type arguments to internal `getDBChanges` appear only in `internal/getDBChanges.test.ts` (`getDBChanges<Collection>` at lines 85, 116, 143, 168, 196, 240, 285, 317, 342, plus any added by 01_01). The `type Collection` alias at `:7` goes away with them.
+- Callers without masks, which must keep compiling unchanged: `getDBChangesDiff.test.ts` (several), `src/firestore/internal/createRunBatch.emulator.test.ts:34,73`, `src/firestore/internal/createRunTransaction.emulator.test.ts:42`, `expectNoDBChanges.ts:15` (internal `getDBChanges` without masks).
+- Callers with masks: `getDBChangesDiff.test.ts:68-69` (`{ spaces: ['updated'] }`), `:146-155` (`diffWith(masks?: { spaces: string[] })`), README `:591`.
+- `UpdateData` is exported from `firebase-admin/firestore` and already used in `src/firestore/internal/TransactionWriter.ts:7,37`.
+- README sections: masks paragraph `packages/firebase-kit-admin/README.md:564-570`, emulator test example `:573-609`, testing API line `:814-815`. The `DBSpace` interface and `Collection` enum used by the README example come from the `src/spaces/spaceRefs.ts` and `src/firebase/db.ts` snippets at `:187-235`.
+
+Design decisions that reach this task (owner-approved, see `.mise/spec.md`):
+
+- Reuse Firestore's `UpdateData<T>` rather than a hand-written path type.
+- The schema is a type argument on each call, mapping collection name to document type. One exported function, no factory.
+- Masks without a schema do not compile. No `FieldPath` entries.
+- Nested maps typed as `interface` produce no dotted keys, exactly as with `update()`. Accepted and documented.
+- Shipped as a major. The squash commit needs a `BREAKING CHANGE:` footer (CLAUDE.md "Releasing"). That is a merge-time concern, not this task's commit, but the README must not describe the old typing.
+
+## Guides
+
+none (the mise config has no Skills & guides entries)
+
+## Implementation details
+
+1. `getDBChangesDiff.ts`:
+
+   ```ts
+   import type { DocumentData, UpdateData } from 'firebase-admin/firestore'
+
+   export type DBMasks<TSchema> = {
+     [C in keyof TSchema & string]?: readonly (keyof UpdateData<TSchema[C]> & string)[]
+   }
+
+   export const getDBChangesDiff = async <
+     TSchema extends { [C in keyof TSchema]: DocumentData } = never,
+   >(
+     before: DBSnapshot,
+     masks?: NoInfer<[TSchema] extends [never] ? undefined : DBMasks<TSchema>>,
+   ): Promise<string>
+   ```
+
+   The planner type-checked this exact shape against the installed firebase-admin with strict settings: interface schemas and interface top-level documents compile, `'quote.fees.at'` through a `{...} | null` map compiles, `'items'` (whole array) compiles, typos, `'items.0.sku'`, unknown collections and schema-less masks are rejected, and a `DBMasks<S>` value is assignable to `Partial<Record<string, readonly string[]>>` without a cast. Rewrite the JSDoc: masks are per-collection Firestore `update()`-style field paths, always split on dots, type checked against `TSchema` via `UpdateData`, required schema when masks are passed, and the interface caveat. Give `DBMasks` its own JSDoc.
+2. `internal/getDBChanges.ts`: drop the `TCollection` generic. `masks?: Partial<Record<string, readonly string[]>>`. Replace the cast and its comment at `:30-32` with `const maskKeys = masks ?? {}` (or equivalent) and adjust types so it passes to `maskProps`/`maskModifiedProps` without a cast.
+3. `internal/maskProps.ts` and `internal/maskModifiedProps.ts`: widen `maskKeys` to `Partial<Record<string, readonly string[]>>` (the existing `keys` undefined check and `?? []` already handle a missing collection). No behavior change.
+4. `README.md`:
+   - Masks paragraph: masks are keyed by collection and list Firestore `update()`-style field paths, so `'quote.fees.at'` masks one nested value. Pass a schema type argument mapping each collection to its document type, and every path is checked with Firestore's `UpdateData`, so a typo fails to compile. Masks without a schema do not compile, while a call with no masks needs no type argument. A path cannot reach into array elements (mask the array whole) and a nested map typed as an `interface` adds no dotted paths, the same as `update()`. A field whose own name contains a `.` cannot be masked on its own. Keep the existing sentences on `(before)`/`(after)` tokens, Timestamp tokens and numbering, extended to say nested masked values behave the same.
+   - Example: define the schema next to the test and pass it, for example `type DBSchema = { [Collection.Spaces]: DBSpace }` and `getDBChangesDiff<DBSchema>(before, { [Collection.Spaces]: ['updated'] })`, importing `Collection` and `DBSpace` from the earlier snippets' modules. Pick whatever keying matches how the earlier snippets define `Collection` and make sure the block type-checks.
+   - API line: `getDBChangesDiff<TSchema>(before, masks?)` with a short note that `masks` is a `DBMasks<TSchema>`. Add `DBMasks<TSchema>` as its own entry if the section lists types.
+   - Never restate dependency version ranges. Keep install blocks untouched.
+
+## Gotchas
+
+- `NoInfer` matters. Without it TypeScript can infer `TSchema` from the masks literal and the schema-less error disappears. Keep the `[TSchema] extends [never]` brackets so the conditional does not distribute.
+- `exactOptionalPropertyTypes` is on (`@tsconfig/strictest`). Passing an explicit `undefined` for `masks` from a helper must still compile. Check the `diffWith` helper in `getDBChangesDiff.test.ts`.
+- `keyof UpdateData<DocumentData>` accepts any string. Test schemas must use concrete document types, or the negative type tests prove nothing.
+- Interface nested maps add no dotted keys. Use `type` aliases for the local test document types with nested maps. Do not change `src/__test__/db/types.ts`.
+- `@ts-expect-error` lines are checked by `tsc --build` because test files are in `src` (`packages/firebase-kit-admin/tsconfig.json` includes `src`). Each one must sit directly on the line that errors.
+- Test file conventions (CLAUDE.md): `vi.mock` directly below imports, `vi.hoisted` above them, every other declaration below.
+- Comment and README prose: no colons, semicolons or em-dashes inside sentences (`.claude/mise-checklist.md` rule 7), except a colon introducing a code block or list.
+
+## Verification
+
+Run from the repo root: `yarn format`, `yarn lint`, `yarn build`, `yarn test:unit`, `yarn test:emulator` (the emulator suites call `getDBChangesDiff` and must keep compiling and passing).
+
+Tests this task writes or changes:
+
+- `packages/firebase-kit-admin/src/testing/getDBChangesDiff.test.ts`:
+  - Define a local schema with type aliases, for example `type Space = { name: string; updated: string; meta: { at: Timestamp; keep: string } | null; tags: string[] }` and `type Schema = { spaces: Space }`.
+  - Update the existing masked calls to pass `<Schema>`, and type `diffWith`'s parameter as `DBMasks<Schema>`.
+  - Type tests with `@ts-expect-error` (each must be needed): a typo path, `'tags.0'`, a path into a Timestamp (`'meta.at.seconds'`), an unknown collection key, and masks passed with no type argument. Positive cases that must compile: `'meta.at'`, `'tags'`, a schema declared as an `interface`, and a call with no masks and no type argument.
+  - End-to-end: a nested Timestamp masked with `'meta.at'` on a modified document prints `/Timestamp (before)/`/`/Timestamp (after)/` inside `meta`, keeps `keep` visible, and another Timestamp numbers from `0000` (inline snapshot of the full DB DIFF string, pattern at `:131-184`).
+- `packages/firebase-kit-admin/src/testing/internal/getDBChanges.test.ts`: remove the `type Collection` alias and every `<Collection>` type argument. Inline snapshots stay unchanged.
+
+Substitute check for the README (no repo test can import it, per the config's Test exceptions): `yarn pack` the `firebase-kit-admin` and `firebase-kit-protocol` workspaces (never `npm pack`), install the tarballs in a throwaway consumer project outside the repo, extract the README's `src/firebase/db.ts`, `src/spaces/spaceRefs.ts`, `src/spaces/renameSpace.ts` and `src/spaces/renameSpace.emulator.test.ts` blocks verbatim to the paths in their header comments, and run `tsc --noEmit`. It must pass. Then change the example's mask to a misspelled path and confirm `tsc` fails, then revert. Record the result in the task's progress notes.
