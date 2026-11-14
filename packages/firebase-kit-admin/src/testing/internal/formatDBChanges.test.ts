@@ -29,20 +29,20 @@ it('renders the envelope with a section per change', () => {
     "DB DIFF
 
     --------------------------------
-     ADDED (path: spaces/[ID])
-    --------------------------------
-    + Object {
-    +   "name": "new",
-    + }
-    --------------------------------
-
-    --------------------------------
      MODIFIED (path: entries/[ID])
     --------------------------------
       Object {
     -   "name": "before",
     +   "name": "after",
       }
+    --------------------------------
+
+    --------------------------------
+     ADDED (path: spaces/[ID])
+    --------------------------------
+    + Object {
+    +   "name": "new",
+    + }
     --------------------------------
 
     --------------------------------
@@ -140,4 +140,54 @@ it('orders the sections so the output is stable across runs', () => {
   // Verify: sections are sorted before joining, so the order documents happened
   // to be read in cannot churn a snapshot
   expect(formatDBChanges(changes)).toEqual(inOrder)
+})
+
+const toHeaders = (text: string): string[] =>
+  text.split('\n').filter((line) => /^ (ADDED|MODIFIED|REMOVED) /.test(line))
+
+it('puts each document directly above the documents in its subcollections', () => {
+  const ana = createDoc('spaces/space-a', { name: 'Ana' }, 1000)
+  const luisBefore = createDoc('spaces/space-b', { name: 'Luis' }, 1000)
+  const luisAfter = createDoc('spaces/space-b', { name: 'Luis M.' }, 2000)
+  const person = createDoc('people/person-1', { name: 'Zoe' }, 2000)
+  const anaEntry = createDoc('spaces/space-a/entries/entry-1', { n: 1 }, 2000)
+  const luisEntry = createDoc('spaces/space-b/entries/entry-2', { n: 2 }, 2000)
+  const luisGone = createDoc('spaces/space-b/entries/entry-3', { n: 3 }, 1000)
+
+  const changes = getDBChanges(
+    createDBSnapshot([ana, luisBefore, luisGone]),
+    createDBSnapshot([ana, luisAfter, person, anaEntry, luisEntry]),
+  )
+
+  // Verify: sections sort by path before kind, so the modified space sits
+  // right above its own added and removed entries instead of every addition
+  // coming first. The unmodified space has no section, and its number alone
+  // says which space the first entry went to
+  expect(toHeaders(formatDBChanges(changes))).toEqual([
+    ' ADDED (path: people/[ID])',
+    ' ADDED (path: spaces/[ID 1]/entries/[ID])',
+    ' MODIFIED (path: spaces/[ID 2])',
+    ' ADDED (path: spaces/[ID 2]/entries/[ID])',
+    ' REMOVED (path: spaces/[ID 2]/entries/[ID])',
+  ])
+})
+
+it('keeps a collection apart from one whose name starts the same', () => {
+  const order = createDoc('order/order-1', { n: 1 }, 1000)
+  const turn = createDoc('order/order-1/turns/turn-1', { n: 1 }, 1000)
+  const location = createDoc('order-location/location-1', { n: 1 }, 1000)
+
+  const changes = getDBChanges(
+    createDBSnapshot([]),
+    createDBSnapshot([location, turn, order]),
+  )
+
+  // Verify: names compare whole, so the order and its turns stay together. A
+  // sort over the rendered text puts `order-location` first, because `-` sorts
+  // ahead of the `/` that ends `order`
+  expect(toHeaders(formatDBChanges(changes))).toEqual([
+    ' ADDED (path: order/[ID 1])',
+    ' ADDED (path: order/[ID 1]/turns/[ID])',
+    ' ADDED (path: order-location/[ID])',
+  ])
 })

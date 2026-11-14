@@ -1,49 +1,64 @@
+import { compareCodeUnits } from './compareCodeUnits.js'
+import { compareDocPaths } from './compareDocPaths.js'
 import type { DBSnapshotChanges } from './DocumentChangeSnapshot.js'
+import type { DocPathSegment } from './getDocPathSegments.js'
 
 const TextLine = '--------------------------------'
+
+const KindOrder = { ADDED: 0, MODIFIED: 1, REMOVED: 2 }
+
+interface Section {
+  kind: keyof typeof KindOrder
+  path: string
+  pathSegments: readonly DocPathSegment[]
+  body: string
+}
+
+// The first line of an added or removed diff only shows the empty object the
+// document is compared against, so it is dropped.
+const dropFirstLine = (text: string): string =>
+  text.split('\n').slice(1).join('\n')
+
+// Path comes first so a document's section sits directly above the sections
+// of the documents in its subcollections. The body breaks the last ties, so
+// the order documents happened to be read in cannot churn a snapshot.
+const compareSections = (a: Section, b: Section): number =>
+  compareDocPaths(a.pathSegments, b.pathSegments) ||
+  KindOrder[a.kind] - KindOrder[b.kind] ||
+  compareCodeUnits(a.body, b.body)
 
 /**
  * Renders a changes object as the printable DB DIFF text. Timestamps and
  * Buffers come out already normalized (`/Timestamp 0000/`, `/Buffer .../`).
  */
 export const formatDBChanges = (changes: DBSnapshotChanges): string => {
-  const results: string[] = []
+  const sections: Section[] = [
+    ...changes.added.map((snapshot) => ({
+      kind: 'ADDED' as const,
+      path: snapshot.normalizedPath,
+      pathSegments: snapshot.pathSegments,
+      body: dropFirstLine(snapshot.getDiff() ?? ''),
+    })),
+    ...changes.modified.map((snapshot) => ({
+      kind: 'MODIFIED' as const,
+      path: snapshot.normalizedPath,
+      pathSegments: snapshot.pathSegments,
+      body: snapshot.getDiff() ?? '',
+    })),
+    ...changes.removed.map((snapshot) => ({
+      kind: 'REMOVED' as const,
+      path: snapshot.normalizedPath,
+      pathSegments: snapshot.pathSegments,
+      body: dropFirstLine(snapshot.getDiff() ?? ''),
+    })),
+  ]
 
-  if (changes.added.length > 0) {
-    changes.added.forEach((snapshot) => {
-      let text = snapshot.getDiff() ?? ''
+  const results = sections
+    .sort(compareSections)
+    .map(
+      ({ kind, path, body }) =>
+        `${TextLine}\n ${kind} (path: ${path})\n${TextLine}\n${body}`,
+    )
 
-      // Remove first line of text as it is not useful (only shows the object
-      // removed)
-      text = text.split('\n').slice(1).join('\n')
-
-      text = `${TextLine}\n ADDED (path: ${snapshot.normalizedPath})\n${TextLine}\n${text}`
-      results.push(text)
-    })
-  }
-
-  if (changes.removed.length > 0) {
-    changes.removed.forEach((snapshot) => {
-      let text = snapshot.getDiff() ?? ''
-
-      // Remove first line of text as it is not useful (only shows the object
-      // added)
-      text = text.split('\n').slice(1).join('\n')
-
-      text = `${TextLine}\n REMOVED (path: ${snapshot.normalizedPath})\n${TextLine}\n${text}`
-      results.push(text)
-    })
-  }
-
-  if (changes.modified.length > 0) {
-    changes.modified.forEach((snapshot) => {
-      let text = snapshot.getDiff() ?? ''
-
-      text = `${TextLine}\n MODIFIED (path: ${snapshot.normalizedPath})\n${TextLine}\n${text}`
-      results.push(text)
-    })
-  }
-
-  // Sort results to keep the order consistent across runs
-  return `DB DIFF\n\n${results.sort().join(`\n${TextLine}\n\n`)}`
+  return `DB DIFF\n\n${results.join(`\n${TextLine}\n\n`)}`
 }

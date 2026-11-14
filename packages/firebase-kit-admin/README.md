@@ -561,6 +561,21 @@ snapshot. `expectNoDBChanges(before)` re-reads them too and fails, printing the
 diff, if any document was added, removed or modified. A rewrite with identical
 data counts as a modification, because the document's update time moved.
 
+The diff has one section per changed document, headed by its path. Ids differ
+between runs, so a document's own id prints as `[ID]` and the parent of a
+subcollection document prints as a number, as in `spaces/[ID 1]/entries/[ID]`.
+The number is the parent's rank among the documents of its collection in the
+snapshot, sorted by content. A document is ranked by what it held before the
+code under test ran, and documents the test creates are numbered after the ones
+already there, so a number only moves when an edit makes one document sort past
+another. Documents with identical content share a number. In a diff that holds
+subcollection documents, the documents of the parent collection show their
+number in their own sections too, so `spaces/[ID 1]` is the parent of
+`spaces/[ID 1]/entries/[ID]`. Sections are sorted by path, which puts each
+document directly above the documents in its subcollections. Every parent of a
+subcollection document has to be in the snapshot, so give `getDBSnapshot` a ref
+or query for the parent collection as well.
+
 Masks hide values not stable enough to assert on. They are keyed by collection
 and list Firestore `update()`-style field paths, so `'quote.fees.at'` masks one
 nested value. Pass a schema type argument mapping each collection to its

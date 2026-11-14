@@ -20,6 +20,13 @@ export type DBMasks<TSchema> = {
  * `before` with `getDBSnapshot`, runs the code under test, then pins this
  * call's result with an inline snapshot.
  *
+ * Ids are not stable across runs, so a document prints as `[ID]` and the
+ * parent of a subcollection document as its number among its siblings, as in
+ * `spaces/[ID 1]/entries/[ID]`. A parent is ranked by what it held before the
+ * test, documents the test creates are numbered after the pre-existing ones,
+ * and identical siblings share a number. Sections are sorted by path, so a
+ * document sits directly above the documents in its subcollections.
+ *
  * `masks` hides per-collection fields whose values are not stable enough to
  * assert on. Each entry is a Firestore `update()`-style field path, always
  * split on dots, so `'quote.fees.at'` masks one nested value. `TSchema` maps

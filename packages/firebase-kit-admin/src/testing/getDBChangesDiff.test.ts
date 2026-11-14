@@ -232,6 +232,45 @@ it('masks a nested timestamp by dotted path', async () => {
   `)
 })
 
+it('names a parent by number and lists its children under it', async () => {
+  const createSpace = (name: string, updateTimeMs: number) =>
+    createDocSnapshot({ path: 'spaces/space-1', data: { name }, updateTimeMs })
+  const { state, query } = createMutableQuery([createSpace('Old', 1)])
+  const before = await getDBSnapshot(query)
+  state.docs = [
+    createDocSnapshot({
+      path: 'spaces/space-1/entries/entry-1',
+      data: { label: 'first' },
+      updateTimeMs: 2,
+    }),
+    createSpace('New', 2),
+  ]
+
+  const diff = await getDBChangesDiff(before)
+
+  // Verify: the space reads `[ID 1]` in its own section and in its entry's
+  // path, and its section comes first although the entry is an addition
+  expect(diff).toMatchInlineSnapshot(`
+    "DB DIFF
+
+    --------------------------------
+     MODIFIED (path: spaces/[ID 1])
+    --------------------------------
+      Object {
+    -   "name": "Old",
+    +   "name": "New",
+      }
+    --------------------------------
+
+    --------------------------------
+     ADDED (path: spaces/[ID 1]/entries/[ID])
+    --------------------------------
+    + Object {
+    +   "label": "first",
+    + }"
+  `)
+})
+
 it('type checks mask paths against the schema', async () => {
   const before = createDBSnapshot([])
   const diffs = await Promise.all([
