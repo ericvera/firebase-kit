@@ -69,6 +69,13 @@ A nested map typed as a named interface adds no dotted keys, exactly as with `up
 
   The pull request is opened after the close step has removed `.mise/`, so this spec is gone by then. Whoever writes the pull request description takes the footer verbatim from the body of the `Task 01_02` commit on the branch, found with `git log --grep='^Task 01_02' --format=%B` (or `git log --format=%B` on the branch), not from this file.
 - README public documentation of the masks API (`packages/firebase-kit-admin/README.md`) is rewritten.
+- Amendment 2026-11-14, public output change in `firebase-kit-admin/testing`: `getDBChangesDiff` (and the `expectNoDBChanges` failure diff) prints a subcollection document's parent as its number among its siblings instead of a content hash, prints that number in the parent collection's own sections, and sorts sections by path before kind. Every consumer's recorded snapshot of that output must be re-recorded. Task 02_05's commit carries a second single-line footer, and the pull request description must repeat it verbatim beside the 01_02 footer, each as its own paragraph. Take both from the branch with `git log --format=%B | grep '^BREAKING CHANGE:'`, not from this file:
+
+  ```text
+  BREAKING CHANGE: getDBChangesDiff output now names a subcollection document's parent by its number among its siblings instead of a content hash, prints that number in the parent collection's own sections, and sorts sections by path before kind, so existing getDBChangesDiff and expectNoDBChanges snapshots must be re-recorded.
+  ```
+
+- Amendment 2026-11-14: a new README paragraph (`packages/firebase-kit-admin/README.md`, before the masks paragraph) documents numbered parents and path ordering.
 
 ## Task index
 
@@ -76,3 +83,12 @@ A nested map typed as a named interface adds no dotted keys, exactly as with `up
 | --- | --- | --- |
 | `01_01_nested_mask_paths.md` | Mask entries resolve as dotted paths through plain maps, with copy-on-write so caller data is never mutated | `packages/firebase-kit-admin/src/testing/internal/maskPath.ts` (new), `internal/maskProps.ts`, `internal/maskModifiedProps.ts`, `internal/getDBChanges.ts` |
 | `01_02_typed_mask_schema.md` | `getDBChangesDiff` takes a schema type argument and types masks with `keyof UpdateData`, internal generic dropped, README rewritten | `packages/firebase-kit-admin/src/testing/getDBChangesDiff.ts`, `internal/getDBChanges.ts`, `internal/maskProps.ts`, `internal/maskModifiedProps.ts`, `packages/firebase-kit-admin/README.md` |
+| `02_01_split_mask_path_helpers.md` | Check and commit `isMap`, `readPath`, `writePath` as one file each, beside `maskPath.ts` | `internal/isMap.ts`, `internal/readPath.ts`, `internal/writePath.ts` (all new) |
+| `02_02_repoint_mask_callers.md` | Check and commit the mask callers' new imports and the deletion of `maskPath.ts` | `internal/maskProps.ts`, `internal/maskModifiedProps.ts`, `internal/maskPath.ts` (deleted) |
+| `02_03_doc_numbering_helpers.md` | Check and commit the pure helpers that number documents among siblings and build path segments | `internal/compareCodeUnits.ts`, `internal/getCollectionPatterns.ts`, `internal/getDocNumbers.ts`, `internal/getParentPatterns.ts`, `internal/getDocPathSegments.ts` (all new) |
+| `02_04_number_parents_in_paths.md` | Check and commit numbered parents in diff paths, replacing the content hash | `internal/formatDocPath.ts` (new), `internal/DocumentChangeSnapshot.ts`, `internal/getDBChanges.ts` |
+| `02_05_sort_sections_by_path.md` | Check and commit path-before-kind section order, README and JSDoc, with the snapshot re-record `BREAKING CHANGE:` footer | `internal/compareDocPaths.ts` (new), `internal/formatDBChanges.ts`, `packages/firebase-kit-admin/src/testing/getDBChangesDiff.ts`, `packages/firebase-kit-admin/README.md` |
+
+## Amendments
+
+- 2026-11-14 `getDBChangesDiff` output changes. A subcollection document's parent prints as its number among its siblings instead of a content hash, a collection's documents print their number in their own sections when the diff holds documents from one of its subcollections, sections sort by path before kind, and `maskPath.ts` is split into one file per function. The work is already in the working tree, uncommitted, and the task is to check and commit it — the parent hash changed on any edit to the parent and reordered sections, and files in this repo hold one main export — tasks: 02_01, 02_02, 02_03, 02_04, 02_05
