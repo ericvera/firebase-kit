@@ -49,6 +49,8 @@ Verified by type-checking scratch files with tsc against the installed firebase-
 - A mask entry addresses fields the way Firestore's `update()` addresses them. A string is a field path and is always split on dots, so `'quote.fees.topUpRetryStartedAt'` masks that one nested value.
 - Hard requirement: every field passed in a mask is type checked against the collection's document type the same way Firestore validates the fields of `update()` when it is given a typed data class, so a mistyped field path fails to compile. Reuse Firestore's existing type for this rather than a hand-written path type.
 
+- Release (owner: "definitely worth a major"): the change ships as a major. The type parameter changes from a collection-name union to a schema map, and a string mask for a literal dotted field name stops matching, so the squashed commit carries a `BREAKING CHANGE:` footer and all three packages take the next major.
+
 ## Assumptions
 
 - Following `update()`: a path walks maps only and cannot reach into array elements; an array is a value and can be masked whole.
@@ -57,7 +59,6 @@ Verified by type-checking scratch files with tsc against the installed firebase-
 - A path whose intermediate map is missing, or is not a map, is skipped silently, as a missing top-level field is today.
 - A nested masked value gets the same treatment as a top-level one: type token, `(before)`/`(after)` labels only when present on both sides and changed.
 - Masking never mutates the caller's documents, including nested maps.
-- The change is breaking (the type parameter changes from a collection-name union to a schema map, and a string mask for a literal dotted field name stops matching), so the squashed commit carries a `BREAKING CHANGE:` footer and all three packages take the next major.
 - README mask documentation and the API line are updated in the same change.
 - Out of scope: replacing the okven `maskTopUpRetryStartedAt` helper (another repo) and adding masks to `expectNoDBChanges`.
 
