@@ -10,7 +10,7 @@
 - Masking never mutates the caller's documents, nested maps included.
 - Every mask entry is type checked against its collection's document type with Firestore's own `UpdateData<T>`, so a mistyped path fails to compile. Document types come from a schema type argument on each call: `getDBChangesDiff<DBSchema>(before, { orders: ['quote.fees.topUpRetryStartedAt'] })`, where `DBSchema` maps each collection name to its document type.
 - Passing masks without a schema type argument does not compile. Calling without masks still needs no type argument.
-- Ships as a major (owner decision). The squash commit carries a `BREAKING CHANGE:` footer.
+- Ships as a major (owner decision). Task 01_02's commit carries a `BREAKING CHANGE:` footer naming the three breaks. The repository squashes with `COMMIT_MESSAGES`, so that footer lands in the squash commit and drives the release computation.
 
 Out of scope: `FieldPath` entries, masks on `expectNoDBChanges`, the okven helper replacement.
 
@@ -61,7 +61,7 @@ Interfaces as nested map types add no dotted keys, exactly as with `update()`. T
 
 ## Hard-to-undo
 
-- Public API change in `firebase-kit-admin/testing`: `getDBChangesDiff`'s type parameter changes from a collection-name union to a schema map, masks without a schema stop compiling, a dotted mask string now addresses a nested field instead of a literal dotted top-level field, and a new exported type `DBMasks` is added. Released as a major. The squash commit message must carry a `BREAKING CHANGE:` footer, and all three packages take the next major.
+- Public API change in `firebase-kit-admin/testing`: `getDBChangesDiff`'s type parameter changes from a collection-name union to a schema map, masks without a schema stop compiling, a dotted mask string now addresses a nested field instead of a literal dotted top-level field, and a new exported type `DBMasks` is added. Released as a major. Task 01_02's commit carries the `BREAKING CHANGE:` footer (the squash body joins branch commit messages, so it reaches the release computation), and all three packages take the next major.
 - README public documentation of the masks API (`packages/firebase-kit-admin/README.md`) is rewritten.
 
 ## Task index

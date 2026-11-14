@@ -33,7 +33,7 @@ Design decisions that reach this task (owner-approved, see `.mise/spec.md`):
 - The schema is a type argument on each call, mapping collection name to document type. One exported function, no factory.
 - Masks without a schema do not compile. No `FieldPath` entries.
 - Nested maps typed as `interface` produce no dotted keys, exactly as with `update()`. Accepted and documented.
-- Shipped as a major. The squash commit needs a `BREAKING CHANGE:` footer (CLAUDE.md "Releasing"). That is a merge-time concern, not this task's commit, but the README must not describe the old typing.
+- Shipped as a major. The release version is computed from commit footers only (CLAUDE.md "Releasing"), and the repository squashes with `squash_merge_commit_message: COMMIT_MESSAGES`, so the squash body is the branch's commit messages joined together and a footer in any branch commit reaches the release computation. This task's commit carries the `BREAKING CHANGE:` footer (step 5 of Implementation details). `.mise` is deleted before the PR exists, so the commit itself is the only durable record. The README must not describe the old typing.
 
 ## Guides
 
@@ -66,6 +66,19 @@ none (the mise config has no Skills & guides entries)
    - Example: define the schema next to the test and pass it, for example `type DBSchema = { [Collection.Spaces]: DBSpace }` and `getDBChangesDiff<DBSchema>(before, { [Collection.Spaces]: ['updated'] })`, importing `Collection` and `DBSpace` from the earlier snippets' modules. Pick whatever keying matches how the earlier snippets define `Collection` and make sure the block type-checks.
    - API line: `getDBChangesDiff<TSchema>(before, masks?)` with a short note that `masks` is a `DBMasks<TSchema>`. Add `DBMasks<TSchema>` as its own entry if the section lists types.
    - Never restate dependency version ranges. Keep install blocks untouched.
+5. Commit message: the commit that lands this task's work must end its body, before the `Co-Authored-By:` trailer, with a `BREAKING CHANGE:` footer naming all three breaks. Use this text (wording may be tightened, the three breaks may not be dropped):
+
+   ```text
+   BREAKING CHANGE: getDBChangesDiff in firebase-kit-admin/testing changes its
+   masks API. The type parameter is now a schema map from collection name to
+   document type instead of a collection-name union, so
+   getDBChangesDiff<DBCollection>(...) no longer compiles. Passing masks without
+   a schema type argument no longer compiles. A dotted mask string such as
+   'a.b' now addresses the nested field b inside map a instead of a top-level
+   field literally named 'a.b'.
+   ```
+
+   `!` after the type is optional and not enough on its own. Keep the footer as the last paragraph before the trailer so `conventional-changelog` parses it.
 
 ## Gotchas
 
@@ -89,5 +102,7 @@ Tests this task writes or changes:
   - Type tests with `@ts-expect-error` (each must be needed): a typo path, `'tags.0'`, a path into a Timestamp (`'meta.at.seconds'`), an unknown collection key, and masks passed with no type argument. Positive cases that must compile: `'meta.at'`, `'tags'`, a schema declared as an `interface`, and a call with no masks and no type argument.
   - End-to-end: a nested Timestamp masked with `'meta.at'` on a modified document prints `/Timestamp (before)/`/`/Timestamp (after)/` inside `meta`, keeps `keep` visible, and another Timestamp numbers from `0000` (inline snapshot of the full DB DIFF string, pattern at `:131-184`).
 - `packages/firebase-kit-admin/src/testing/internal/getDBChanges.test.ts`: remove the `type Collection` alias and every `<Collection>` type argument. Inline snapshots stay unchanged.
+
+Substitute check for the release footer (no test covers commit messages): after committing, run `git log -1 --format=%B` and confirm the message contains a line starting `BREAKING CHANGE:` that names the schema-map type parameter, schema-less masks no longer compiling, and dotted strings addressing nested fields. Record the result in the task's progress notes.
 
 Substitute check for the README (no repo test can import it, per the config's Test exceptions): `yarn pack` the `firebase-kit-admin` and `firebase-kit-protocol` workspaces (never `npm pack`), install the tarballs in a throwaway consumer project outside the repo, extract the README's `src/firebase/db.ts`, `src/spaces/spaceRefs.ts`, `src/spaces/renameSpace.ts` and `src/spaces/renameSpace.emulator.test.ts` blocks verbatim to the paths in their header comments, and run `tsc --noEmit`. It must pass. Then change the example's mask to a misspelled path and confirm `tsc` fails, then revert. Record the result in the task's progress notes.
