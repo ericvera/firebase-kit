@@ -51,6 +51,9 @@ Verified by type-checking scratch files with tsc against the installed firebase-
 
 - Release (owner: "definitely worth a major"): the change ships as a major. The type parameter changes from a collection-name union to a schema map, and a string mask for a literal dotted field name stops matching, so the squashed commit carries a `BREAKING CHANGE:` footer and all three packages take the next major.
 
+- Document types are supplied as a schema type argument on each call: `getDBChangesDiff<DBSchema>(before, { orders: ['quote.fees.topUpRetryStartedAt'] })`, where `DBSchema` maps each collection name to its document type. One exported function, no factory.
+- Passing masks without a schema does not compile. There is no unchecked mask path. Calls with no masks keep working without a type argument.
+
 ## Assumptions
 
 - Following `update()`: a path walks maps only and cannot reach into array elements; an array is a value and can be masked whole.
@@ -62,7 +65,8 @@ Verified by type-checking scratch files with tsc against the installed firebase-
 - README mask documentation and the API line are updated in the same change.
 - Out of scope: replacing the okven `maskTopUpRetryStartedAt` helper (another repo) and adding masks to `expectNoDBChanges`.
 
-## Open questions
+## Proposal
 
-1. How a caller supplies each collection's document type.
-2. Whether masks may still be passed without document types.
+- Issue: `getDBChangesDiff` masks only match top-level fields, so one unstable nested value cannot be masked without hiding its whole parent map.
+- Approach: masks become Firestore `update()`-style dotted paths, type checked per collection with `keyof UpdateData<Doc>` through a schema type argument that is required whenever masks are passed; shipped as a major with a `BREAKING CHANGE:` footer.
+- Skips: none — public API change, so spec and critic both run.
