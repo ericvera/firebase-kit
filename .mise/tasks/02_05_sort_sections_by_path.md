@@ -30,7 +30,7 @@ none (the mise config has no Skills & guides entries)
 ## Implementation details
 
 1. Read the working-tree diffs against the description above.
-2. README checks (CLAUDE.md `## Documentation conventions`): no dependency version restated, no install block added. Confirm the paragraph matches the code. Parents are ranked by pre-test content, pre-existing documents come first, identical siblings share a number, numbers show in the parent collection's own sections only when the diff holds a changed subcollection document, and sections sort by path.
+2. README checks (CLAUDE.md `## Documentation conventions`): no dependency version restated, no install block added. Confirm the paragraph matches the code. Parents are ranked by pre-test content, pre-existing documents come first, identical siblings share a number (the paragraph starting at `packages/firebase-kit-admin/README.md:564` and the `getDBChangesDiff` JSDoc do not say this yet; add that sentence to both), numbers show in the parent collection's own sections only when the diff holds a changed subcollection document, and sections sort by path.
 3. Run the checklist (`.claude/mise-checklist.md`), rule 7 especially over the README paragraph and JSDoc. Fix only failures.
 4. Stage exactly these seven files. Confirm `git status --short packages` is empty afterwards apart from what you staged, then commit with this message (the footer is one line, followed by the attribution trailer):
 

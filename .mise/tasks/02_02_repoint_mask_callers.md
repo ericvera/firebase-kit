@@ -18,7 +18,7 @@ Tests: `maskPath.test.ts` (delete, already deleted in the working tree).
 
 - Task 02_01 committed `isMap.ts`, `readPath.ts`, `writePath.ts` with tests. They carry the same code as `maskPath.ts`.
 - The working-tree diff of `maskProps.ts` replaces `import { readPath, writePath } from './maskPath.js'` with two imports from `./readPath.js` and `./writePath.js`. The diff of `maskModifiedProps.ts` replaces the `./maskPath.js` import with imports from `./isMap.js`, `./readPath.js`, `./writePath.js`. Nothing else changes in either file.
-- No other file imports `./maskPath.js` (check with `grep -rn maskPath packages/`).
+- No other file imports `./maskPath.js` (check with `git grep -n maskPath -- packages`, which skips untracked build output and caches under `dist/` and `node_modules/.vite/`).
 - The working tree also holds the uncommitted work of tasks 02_03 to 02_05. Leave it in place.
 
 ## Guides
@@ -28,7 +28,7 @@ none (the mise config has no Skills & guides entries)
 ## Implementation details
 
 1. Confirm `git diff -- packages/firebase-kit-admin/src/testing/internal/maskProps.ts packages/firebase-kit-admin/src/testing/internal/maskModifiedProps.ts` shows import lines only.
-2. Confirm nothing in `packages/` still references `maskPath`, including README and JSDoc.
+2. Confirm `git grep -n maskPath -- packages` prints nothing, including README and JSDoc.
 3. Run the checklist (`.claude/mise-checklist.md`). Fix only failures.
 4. Stage the two edits and the two deletions (`git add` and `git rm --cached` or `git add -A` on exactly those paths) and commit as `Task 02_02: import the split mask helpers and delete maskPath`.
 
