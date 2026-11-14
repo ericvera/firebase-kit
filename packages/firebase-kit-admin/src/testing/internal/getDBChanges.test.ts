@@ -334,6 +334,60 @@ it('leaves a Timestamp inside a masked map out of the numbering', () => {
   `)
 })
 
+it('leaves a nested masked Timestamp out of the numbering', () => {
+  const entry = createEntry(
+    'entry-1',
+    {
+      meta: {
+        at: Timestamp.fromMillis(1000),
+        seen: Timestamp.fromMillis(3000),
+      },
+      updated: Timestamp.fromMillis(5000),
+    },
+    1000,
+  )
+
+  const changes = getDBChanges<Collection>(
+    createDBSnapshot([]),
+    createDBSnapshot([entry]),
+    {
+      entries: ['meta.at'],
+    },
+  )
+
+  // Verify: only the masked leaf becomes a token, and its sibling and the
+  // top-level Timestamp number from zero
+  expect(changes.added.map((snapshot) => snapshot.getDiff()))
+    .toMatchInlineSnapshot(`
+    [
+      "- Object {}
+    + Object {
+    +   "meta": Object {
+    +     "at": "/Timestamp/",
+    +     "seen": "/Timestamp 0000/",
+    +   },
+    +   "updated": "/Timestamp 0001/",
+    + }",
+    ]
+  `)
+})
+
+it("does not modify the documents' nested data", () => {
+  const at = Timestamp.fromMillis(1000)
+  const meta = { at, keep: 'x' }
+  const data = { meta }
+  const entry = createEntry('entry-1', data, 1000)
+
+  getDBChanges<Collection>(createDBSnapshot([]), createDBSnapshot([entry]), {
+    entries: ['meta.at'],
+  })
+
+  // Verify: masking copies the maps along the path rather than writing into
+  // the caller's nested object
+  expect(data.meta).toBe(meta)
+  expect(data.meta.at).toBe(at)
+})
+
 it("does not modify the documents' data", () => {
   const at = Timestamp.fromMillis(1000)
   const data = { at, name: 'entry' }

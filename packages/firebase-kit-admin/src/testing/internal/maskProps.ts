@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { Timestamp } from 'firebase-admin/firestore'
+import { readPath, writePath } from './maskPath.js'
 
 const getTypeName = (value: unknown): string => {
   if (value instanceof Timestamp) {
@@ -41,8 +42,7 @@ export const getTypeToken = (
   return label ? `/${typeName} (${label})/` : `/${typeName}/`
 }
 
-// NOTE: Currently only works with props that exist in the top level of the
-// object
+// Each mask entry is a dotted field path, as in a Firestore `update()`.
 export const maskProps = <T>(
   a: T,
   collection: string,
@@ -58,13 +58,13 @@ export const maskProps = <T>(
     const obj = a as Record<string, unknown>
 
     for (const key of keys) {
-      const value = obj[key]
+      const value = readPath(obj, key)
 
       if (value === undefined) {
         continue
       }
 
-      obj[key] = getTypeToken(value)
+      writePath(obj, key, getTypeToken(value))
     }
   }
 

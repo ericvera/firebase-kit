@@ -39,7 +39,9 @@ export const getDBChanges = <TCollection extends string = string>(
   }
 
   // Step 1: Mask shallow copies, because `data()` may hand back the caller's
-  // own object. Masking first keeps masked timestamps out of the numbering.
+  // own object. Masking copies the nested maps along a masked path itself, so
+  // a shallow copy here is enough. Masking first keeps masked timestamps out of
+  // the numbering.
   const withCopy = (doc: QueryDocumentSnapshot) => ({
     doc,
     data: { ...doc.data() },

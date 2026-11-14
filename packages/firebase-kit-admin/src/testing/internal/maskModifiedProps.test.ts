@@ -98,3 +98,33 @@ it('compares raw Timestamps by instant', () => {
   expect(changedBefore).toEqual({ secret: '/Timestamp (before)/' })
   expect(changedAfter).toEqual({ secret: '/Timestamp (after)/' })
 })
+
+it('labels a changed nested masked value on each side', () => {
+  const before = { meta: { secret: 'old', keep: 'x' } }
+  const after = { meta: { secret: 'new', keep: 'x' } }
+
+  maskModifiedProps(before, after, 'entries', { entries: ['meta.secret'] })
+
+  expect(before).toEqual({ meta: { secret: '/String (before)/', keep: 'x' } })
+  expect(after).toEqual({ meta: { secret: '/String (after)/', keep: 'x' } })
+})
+
+it('keeps the plain token when a nested masked value did not change', () => {
+  const before = { meta: { secret: 'same' } }
+  const after = { meta: { secret: 'same' } }
+
+  maskModifiedProps(before, after, 'entries', { entries: ['meta.secret'] })
+
+  expect(before).toEqual({ meta: { secret: '/String/' } })
+  expect(after).toEqual({ meta: { secret: '/String/' } })
+})
+
+it('keeps the plain token for a nested value whose map is on one side only', () => {
+  const before = { name: 'a' }
+  const after = { name: 'a', meta: { secret: 'new' } }
+
+  maskModifiedProps(before, after, 'entries', { entries: ['meta.secret'] })
+
+  expect(before).toEqual({ name: 'a' })
+  expect(after).toEqual({ name: 'a', meta: { secret: '/String/' } })
+})
