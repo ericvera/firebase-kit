@@ -560,14 +560,42 @@ re-reads those refs and returns the printable diff to pin with an inline
 snapshot. `expectNoDBChanges(before)` re-reads them too and fails, printing the
 diff, if any document was added, removed or modified. A rewrite with identical
 data counts as a modification, because the document's update time moved.
+`getDBChangesDiff` throws when no document was added, removed or modified, so
+`expectNoDBChanges` is the one way to assert that nothing changed.
 
-Masks are per-collection field lists, keyed by the app's own collection names,
-for values not stable enough to assert on. A masked field whose value changed
-still shows, as a `-` / `+` pair whose tokens read `(before)` and `(after)`
-(for example `"/String (before)/"` and `"/String (after)/"`), while an
-unchanged masked field keeps the plain token. A masked Timestamp prints
-`"/Timestamp/"`. Masked fields are left out of the `/Timestamp NNNN/`
-numbering, so masking one timestamp does not shift the numbers of the others.
+The diff has one section per changed document, headed by its path. Ids differ
+between runs, so a document's own id prints as `[ID]` and the parent of a
+subcollection document prints as a number, as in `spaces/[ID 1]/entries/[ID]`.
+The number is the parent's rank among the documents of its collection in the
+snapshot, sorted by content. A document is ranked by what it held before the
+code under test ran, and documents the test creates are numbered after the ones
+already there, so a number only moves when an edit makes one document sort past
+another. Documents with identical content share a number. In a diff that holds
+subcollection documents, the documents of the parent collection show their
+number in their own sections too, so `spaces/[ID 1]` is the parent of
+`spaces/[ID 1]/entries/[ID]`. Sections are sorted by path, which puts each
+document directly above the documents in its subcollections. Every parent of a
+subcollection document has to be in the snapshot, so give `getDBSnapshot` a ref
+or query for the parent collection as well.
+
+Masks hide values not stable enough to assert on. They are keyed by collection
+and list Firestore `update()`-style field paths, so `'quote.fees.at'` masks one
+nested value. Pass a schema type argument mapping each collection to its
+document type, and every path is checked with Firestore's `UpdateData`, so a
+typo fails to compile. Masks without a schema do not compile, while a call with
+no masks needs no type argument. A path cannot reach into array elements, so
+mask the array whole. A nested map typed as a named `interface` adds no dotted
+paths, the same as with `update()`, so declare the document as an `interface`
+with each nested map written as an inline object type on its property, for
+example `interface DBOrder { quote: { fees: { at: Timestamp } } }`. A field
+whose own name contains a `.` cannot be masked on its own.
+
+A masked field whose value changed still shows, as a `-` / `+` pair whose
+tokens read `(before)` and `(after)` (for example `"/String (before)/"` and
+`"/String (after)/"`), while an unchanged masked field keeps the plain token. A
+masked Timestamp prints `"/Timestamp/"`. Masked fields are left out of the
+`/Timestamp NNNN/` numbering, so masking one timestamp does not shift the
+numbers of the others. A masked value inside a nested map behaves the same.
 This example needs a running Firestore emulator and the setup file above.
 
 ```typescript
@@ -578,8 +606,14 @@ import {
   getDBSnapshot,
 } from 'firebase-kit-admin/testing'
 import { expect, it } from 'vitest'
+import { Collection } from '../firebase/db.js'
 import { renameSpace } from './renameSpace.js'
+import type { DBSpace } from './spaceRefs.js'
 import { spaceRefs } from './spaceRefs.js'
+
+interface DBSchema {
+  [Collection.Spaces]: DBSpace
+}
 
 const refs = [spaceRefs.allQuery()]
 
@@ -588,7 +622,9 @@ it('renames the space', async () => {
 
   await renameSpace(undefined, 'space-1', 'Renamed')
 
-  const diff = await getDBChangesDiff(before, { spaces: ['updated'] })
+  const diff = await getDBChangesDiff<DBSchema>(before, {
+    [Collection.Spaces]: ['updated'],
+  })
 
   expect(diff).toMatchInlineSnapshot()
 })
@@ -811,8 +847,9 @@ from `process.env`) follow the same shape.
   directly.
 - **`getDBSnapshot(inputs)`**: Reads the refs or queries into a `DBSnapshot`
   (`{ docs, refs }`).
-- **`getDBChangesDiff(before, masks?)`**: Re-reads `before.refs` and returns
-  the printable diff since it.
+- **`getDBChangesDiff<TSchema>(before, masks?)`**: Re-reads `before.refs` and
+  returns the printable diff since it, and throws if nothing changed. `masks`
+  is a `DBMasks<TSchema>`.
 - **`expectNoDBChanges(before)`**: Re-reads `before.refs` and fails with the
   printed diff if any document was added, removed or modified.
 - **`normalizeData(data, options?)`**: Replaces Firestore Timestamps with
@@ -821,7 +858,7 @@ from `process.env`) follow the same shape.
 - **`expectSuccessResult(response)`**, **`testGetFirestoreReset()`**.
 - **`EmulatorHooksOptions`**, **`EmulatorReset`**, **`RequestBuildersOptions`**,
   **`TestableDBRef`**, **`SnapshotInput`**, **`DBSnapshot`**,
-  **`NormalizeDataOptions`**.
+  **`DBMasks<TSchema>`**, **`NormalizeDataOptions`**.
 
 ### `firebase-kit-admin/validation`
 

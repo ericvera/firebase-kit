@@ -103,3 +103,40 @@ it('names a raw Timestamp by its class', () => {
 it('renders a raw Buffer as the string token', () => {
   expect(getTypeToken(Buffer.from('x'))).toBe('/String/')
 })
+
+it('masks only the leaf of a nested path and keeps its siblings', () => {
+  const data = { meta: { at: Timestamp.fromMillis(1000), keep: 'x' } }
+
+  const result = maskProps(data, 'entries', { entries: ['meta.at'] })
+
+  expect(result).toEqual({ meta: { at: '/Timestamp/', keep: 'x' } })
+})
+
+it('skips a path through a missing map or through an array', () => {
+  const data = { list: [{ at: 'x' }], keep: 'visible' }
+
+  const result = maskProps(data, 'entries', {
+    entries: ['missing.at', 'list.0', 'list.at'],
+  })
+
+  // Verify: a path never indexes into an array, as a missing key is skipped
+  expect(result).toEqual({ list: [{ at: 'x' }], keep: 'visible' })
+})
+
+it('masks an array at the end of a path whole', () => {
+  const data = { meta: { tags: ['a', 'b'] } }
+
+  const result = maskProps(data, 'entries', { entries: ['meta.tags'] })
+
+  expect(result).toEqual({ meta: { tags: '/Array/' } })
+})
+
+it('no longer matches a top-level key whose name contains a dot', () => {
+  const data = { 'a.b': 'literal' }
+
+  const result = maskProps(data, 'entries', { entries: ['a.b'] })
+
+  // Verify: a mask entry is always split on `.`, so the literal key is not
+  // reachable
+  expect(result).toEqual({ 'a.b': 'literal' })
+})
