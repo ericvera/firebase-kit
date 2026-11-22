@@ -4440,7 +4440,7 @@ __metadata:
     firebase-kit-protocol: "workspace:*"
     firebase-tools: "npm:15.36.0"
     jest-diff: "npm:^30.5.2"
-    scdate-testing: "npm:^8.0.0"
+    scdate-testing: "npm:^9.0.1"
     typescript: "npm:^6.0.3"
     vite: "npm:^8.3.8"
     vitest: "npm:^5.1.0"
@@ -7443,25 +7443,25 @@ __metadata:
   languageName: node
   linkType: hard
 
-"scdate-testing@npm:^8.0.0":
-  version: 8.0.0
-  resolution: "scdate-testing@npm:8.0.0"
+"scdate-testing@npm:^9.0.1":
+  version: 9.0.1
+  resolution: "scdate-testing@npm:9.0.1"
   dependencies:
-    scdate: "npm:8.0.0"
+    scdate: "npm:9.0.1"
   peerDependencies:
     vitest: ^5
-  checksum: 10c0/bd728481d0aff63a7a20400f78ccd85582111f028b4bfa2eee5dd6615ecdc2a7ac1b95cc35187f6be4963959c6f821a364fc35bb4b8f15e48bc4bd9b32812bad
+  checksum: 10c0/5b80df4e0bfbc28c7303b69f27e1faf7fdaa9c3cc0475e4a0714c96c72bf7e4fc47b56d8d698c59edd9049e2bb22861af6b1df05f862f8bc51bcfd0aef5fb6fa
   languageName: node
   linkType: hard
 
-"scdate@npm:8.0.0":
-  version: 8.0.0
-  resolution: "scdate@npm:8.0.0"
+"scdate@npm:9.0.1":
+  version: 9.0.1
+  resolution: "scdate@npm:9.0.1"
   dependencies:
     "@date-fns/utc": "npm:^2.1.1"
     date-fns: "npm:^4.4.0"
     date-fns-tz: "npm:^3.2.0"
-  checksum: 10c0/85a2a0c8cd49bb3487f19a13463bf16543ba766d88c0b363d65fbcddc741e591a71516c1c154ee08c02c914dba0d4db0f3c492d5606e63a7a144a35ed46d9fea
+  checksum: 10c0/deb44681f47f4dbd119e17489f37ec75b6cc8f9addb9f5fd70488c7f33e3c612b724c6e79db6398a748c26d4b73e23ab1d6aaae4c1913b9ae8079e2b6d16b072
   languageName: node
   linkType: hard
 

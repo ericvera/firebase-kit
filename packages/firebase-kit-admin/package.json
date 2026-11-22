@@ -71,7 +71,7 @@
     "firebase-admin": "^14.5.1",
     "firebase-functions": "^7.4.0",
     "firebase-tools": "15.36.0",
-    "scdate-testing": "^8.0.0",
+    "scdate-testing": "^9.0.1",
     "typescript": "^6.0.3",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
